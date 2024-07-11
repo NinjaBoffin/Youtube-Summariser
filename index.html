@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Video Summarizer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #333;
+        }
+        #videoInput {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        #submitBtn {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        #result {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>YouTube Video Summarizer</h1>
+    <input type="text" id="videoInput" placeholder="Enter YouTube video URL">
+    <button id="submitBtn">Summarize</button>
+    <div id="result"></div>
+
+    <script>
+        document.getElementById('submitBtn').addEventListener('click', async function() {
+            const videoUrl = document.getElementById('videoInput').value;
+            if (videoUrl) {
+                await summarizeVideo(videoUrl);
+            } else {
+                alert('Please enter a valid YouTube video URL');
+            }
+        });
+
+        async function summarizeVideo(url) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Processing...';
+
+            try {
+                const response = await fetch(`/api/summarize?url=${encodeURIComponent(url)}`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    displayResults(data.transcript, data.summary);
+                } else {
+                    throw new Error(data.error || 'An error occurred');
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `Error: ${error.message}`;
+            }
+        }
+
+        function displayResults(transcript, summary) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = `
+                <h2>Transcript:</h2>
+                <pre>${transcript}</pre>
+                <h2>Summary:</h2>
+                <p>${summary}</p>
+            `;
+        }
+    </script>
+</body>
+</html>
