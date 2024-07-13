@@ -1,4 +1,4 @@
-const fetch = require('node-fetch');
+const { YoutubeTranscript } = require('youtube-transcript');
 
 module.exports = async (req, res) => {
   const { url } = req.query;
@@ -8,7 +8,6 @@ module.exports = async (req, res) => {
   }
 
   try {
-    // TODO: Implement actual transcript fetching and summarisation
     const transcript = await fetchTranscript(url);
     const summary = await summariseText(transcript);
 
@@ -19,11 +18,26 @@ module.exports = async (req, res) => {
 };
 
 async function fetchTranscript(url) {
-  // Placeholder: In a real implementation, you'd use a YouTube transcript API
-  return `This is a placeholder transcript for the video at ${url}`;
+  try {
+    const videoId = extractVideoId(url);
+    const transcriptArray = await YoutubeTranscript.fetchTranscript(videoId);
+    return transcriptArray.map(item => item.text).join(' ');
+  } catch (error) {
+    throw new Error('Failed to fetch transcript: ' + error.message);
+  }
+}
+
+function extractVideoId(url) {
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  const match = url.match(regExp);
+  if (match && match[2].length === 11) {
+    return match[2];
+  } else {
+    throw new Error('Invalid YouTube URL');
+  }
 }
 
 async function summariseText(text) {
-  // Placeholder: In a real implementation, you'd use a text summarisation API
-  return `This is a placeholder summary for the transcript: ${text.slice(0, 50)}...`;
+  // TODO: Implement actual summarization
+  return `This is a placeholder summary for the transcript: ${text.slice(0, 200)}...`;
 }
