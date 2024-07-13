@@ -2,20 +2,18 @@ module.exports = async (req, res) => {
   try {
     const { url } = req.query;
 
-    // Log the received URL
     console.log('Received URL:', url);
 
     if (!url) {
       return res.status(400).json({ error: 'Missing URL parameter' });
     }
 
-    // Return a more detailed response
+    // Return a response that matches what the frontend expects
     res.status(200).json({ 
-      receivedUrl: url,
-      message: `URL successfully received`,
-      timestamp: new Date().toISOString(),
-      queryParams: req.query,
-      headers: req.headers
+      transcript: `This is a placeholder transcript for the video at ${url}`,
+      summary: `This is a placeholder summary for the video at ${url}`,
+      message: `URL successfully received: ${url}`,
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
     console.error('Error in serverless function:', error);
