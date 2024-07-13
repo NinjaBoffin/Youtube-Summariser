@@ -1,4 +1,5 @@
 const { YoutubeTranscript } = require('youtube-transcript');
+const natural = require('natural');
 
 module.exports = async (req, res) => {
   const { url } = req.query;
@@ -9,7 +10,7 @@ module.exports = async (req, res) => {
 
   try {
     const transcriptResult = await fetchTranscript(url);
-    const summary = await summariseText(transcriptResult.transcript);
+    const summary = summariseText(transcriptResult.transcript);
 
     res.status(200).json({ 
       transcript: transcriptResult.transcript,
@@ -56,7 +57,35 @@ function extractVideoId(url) {
   }
 }
 
-async function summariseText(text) {
-  // TODO: Implement actual summarization
-  return `This is a placeholder summary for the transcript: ${text.slice(0, 200)}...`;
+function summariseText(text) {
+  // Tokenize the text into sentences
+  const tokenizer = new natural.SentenceTokenizer();
+  const sentences = tokenizer.tokenize(text);
+
+  // Calculate word frequency
+  const wordFreq = {};
+  sentences.forEach(sentence => {
+    const words = sentence.toLowerCase().split(/\s+/);
+    words.forEach(word => {
+      if (word.length > 3) {  // Ignore short words
+        wordFreq[word] = (wordFreq[word] || 0) + 1;
+      }
+    });
+  });
+
+  // Score sentences based on word frequency
+  const sentenceScores = sentences.map(sentence => {
+    const words = sentence.toLowerCase().split(/\s+/);
+    const score = words.reduce((total, word) => total + (wordFreq[word] || 0), 0);
+    return { sentence, score };
+  });
+
+  // Sort sentences by score and select top 3 (or fewer if there are less than 3 sentences)
+  const topSentences = sentenceScores
+    .sort((a, b) => b.score - a.score)
+    .slice(0, Math.min(3, sentences.length))
+    .map(item => item.sentence);
+
+  // Join the top sentences to form the summary
+  return topSentences.join(' ');
 }
