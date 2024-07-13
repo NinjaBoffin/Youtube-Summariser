@@ -14,7 +14,7 @@ module.exports = async (req, res) => {
     res.status(200).json({ 
       transcript: transcriptResult.transcript,
       summary: summary,
-      debug: transcriptResult.debug
+      message: transcriptResult.message
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -29,19 +29,19 @@ async function fetchTranscript(url) {
     if (transcriptArray.length === 0) {
       return { 
         transcript: "No transcript available for this video.",
-        debug: { videoId, transcriptArray }
+        message: "The video doesn't have any captions or transcript."
       };
     }
 
     const fullTranscript = transcriptArray.map(item => item.text).join(' ');
     return { 
       transcript: fullTranscript,
-      debug: { videoId, transcriptArrayLength: transcriptArray.length, sampleItem: transcriptArray[0] }
+      message: "Transcript fetched successfully."
     };
   } catch (error) {
     return { 
-      transcript: "Failed to fetch transcript: " + error.message,
-      debug: { error: error.toString() }
+      transcript: "Unable to fetch transcript.",
+      message: `Error: ${error.message}. Please try a different video.`
     };
   }
 }
