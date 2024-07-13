@@ -1,16 +1,21 @@
-// api/summarise.js
-
 module.exports = async (req, res) => {
   try {
     const { url } = req.query;
+
+    // Log the received URL
+    console.log('Received URL:', url);
 
     if (!url) {
       return res.status(400).json({ error: 'Missing URL parameter' });
     }
 
+    // Return a more detailed response
     res.status(200).json({ 
-      message: `Received URL: ${url}`,
-      timestamp: new Date().toISOString()
+      receivedUrl: url,
+      message: `URL successfully received`,
+      timestamp: new Date().toISOString(),
+      queryParams: req.query,
+      headers: req.headers
     });
   } catch (error) {
     console.error('Error in serverless function:', error);
