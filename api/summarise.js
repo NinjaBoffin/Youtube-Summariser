@@ -8,10 +8,14 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const transcript = await fetchTranscript(url);
-    const summary = await summariseText(transcript);
+    const transcriptResult = await fetchTranscript(url);
+    const summary = await summariseText(transcriptResult.transcript);
 
-    res.status(200).json({ transcript, summary });
+    res.status(200).json({ 
+      transcript: transcriptResult.transcript,
+      summary: summary,
+      debug: transcriptResult.debug
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -21,9 +25,24 @@ async function fetchTranscript(url) {
   try {
     const videoId = extractVideoId(url);
     const transcriptArray = await YoutubeTranscript.fetchTranscript(videoId);
-    return transcriptArray.map(item => item.text).join(' ');
+    
+    if (transcriptArray.length === 0) {
+      return { 
+        transcript: "No transcript available for this video.",
+        debug: { videoId, transcriptArray }
+      };
+    }
+
+    const fullTranscript = transcriptArray.map(item => item.text).join(' ');
+    return { 
+      transcript: fullTranscript,
+      debug: { videoId, transcriptArrayLength: transcriptArray.length, sampleItem: transcriptArray[0] }
+    };
   } catch (error) {
-    throw new Error('Failed to fetch transcript: ' + error.message);
+    return { 
+      transcript: "Failed to fetch transcript: " + error.message,
+      debug: { error: error.toString() }
+    };
   }
 }
 
