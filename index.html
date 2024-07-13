@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube Video Summarizer</title>
+    <title>YouTube Video Summariser</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -34,27 +34,28 @@
     </style>
 </head>
 <body>
-    <h1>YouTube Video Summarizer</h1>
+    <h1>YouTube Video Summariser</h1>
     <input type="text" id="videoInput" placeholder="Enter YouTube video URL">
-    <button id="submitBtn">Summarize</button>
+    <button id="submitBtn">Summarise</button>
     <div id="result"></div>
 
     <script>
         document.getElementById('submitBtn').addEventListener('click', async function() {
             const videoUrl = document.getElementById('videoInput').value;
             if (videoUrl) {
-                await summarizeVideo(videoUrl);
+                await summariseVideo(videoUrl);
             } else {
                 alert('Please enter a valid YouTube video URL');
             }
         });
 
-        async function summarizeVideo(url) {
+        async function summariseVideo(url) {
             const resultDiv = document.getElementById('result');
             resultDiv.innerHTML = 'Processing...';
 
             try {
-                const response = await fetch(`/api/summarize?url=${encodeURIComponent(url)}`);
+                // This is a placeholder. We'll implement the actual API call later.
+                const response = await fetch(`/api/summarise?url=${encodeURIComponent(url)}`);
                 const data = await response.json();
 
                 if (response.ok) {
