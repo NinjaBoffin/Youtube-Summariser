@@ -13,7 +13,7 @@
             max-width: 800px;
             margin: 0 auto;
         }
-        h1 {
+        h1, h2 {
             color: #333;
         }
         #videoInput {
@@ -28,8 +28,15 @@
             border: none;
             cursor: pointer;
         }
-        #result {
+        #result, #debug {
             margin-top: 20px;
+        }
+        #transcript {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-top: 10px;
         }
     </style>
 </head>
@@ -66,7 +73,7 @@
                 debugDiv.innerHTML += `Response data: ${JSON.stringify(data)}<br>`;
 
                 if (response.ok) {
-                    displayResults(data.message, data.timestamp);
+                    displayResults(data.transcript, data.message, data.timestamp);
                 } else {
                     throw new Error(data.error || 'An error occurred');
                 }
@@ -77,12 +84,14 @@
             }
         }
 
-        function displayResults(message, timestamp) {
+        function displayResults(transcript, message, timestamp) {
             const resultDiv = document.getElementById('result');
             resultDiv.innerHTML = `
                 <h2>Result:</h2>
                 <p>${message}</p>
                 <p>Timestamp: ${timestamp}</p>
+                <h3>Transcript:</h3>
+                <div id="transcript">${transcript}</div>
             `;
         }
     </script>
