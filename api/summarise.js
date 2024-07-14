@@ -8,8 +8,6 @@ const hf = new HfInference(HUGGINGFACE_API_KEY);
 const cache = new NodeCache({ stdTTL: 3600 }); // Cache for 1 hour
 const analyticsCache = new NodeCache({ stdTTL: 86400 }); // Cache for 24 hours
 
-const SUMMARY_TIMEOUT = 10000; // 10 seconds
-
 module.exports = async (req, res) => {
   try {
     const { url } = req.query;
@@ -39,7 +37,7 @@ module.exports = async (req, res) => {
 
     validateVideoLength(transcript);
 
-    const summary = await summarizeTextWithTimeout(transcript.map(item => item.text).join(' '));
+    const summary = await summarizeText(transcript.map(item => item.text).join(' '));
     console.log('Summary generated, length:', summary.length);
 
     const result = {
@@ -110,7 +108,7 @@ function formatTimestamp(seconds) {
 
 function summarizeTextWithTimeout(text) {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('Timeout')), SUMMARY_TIMEOUT);
+    const timeout = setTimeout(() => reject(new Error('Timeout')), 55000); // 55 seconds to stay within the 60-second limit
     
     summarizeText(text)
       .then(result => {
