@@ -1,5 +1,9 @@
 const { YoutubeTranscript } = require('youtube-transcript');
 
+// Placeholder for API keys
+const SUMMARY_API_KEY = process.env.SUMMARY_API_KEY;
+const TRANSCRIPT_API_KEY = process.env.TRANSCRIPT_API_KEY;
+
 module.exports = async (req, res) => {
   try {
     const { url } = req.query;
@@ -21,12 +25,12 @@ module.exports = async (req, res) => {
     const transcript = await fetchTranscript(videoId);
     console.log('Transcript fetched, length:', transcript.length);
 
-    const summary = summarizeText(transcript.map(item => item.text).join(' '));
+    const summary = await summarizeText(transcript.map(item => item.text).join(' '));
     console.log('Summary generated, length:', summary.length);
 
     res.status(200).json({ 
-      transcript: decodeHTMLEntities(transcript.map(item => `${item.timestamp} ${item.text}`).join('\n')),
-      summary: decodeHTMLEntities(summary),
+      transcript: transcript.map(item => `${item.timestamp} ${item.text}`).join('\n'),
+      summary: summary,
       message: `Transcript fetched and summarized for video: ${videoId}`,
       timestamp: new Date().toISOString()
     });
@@ -66,28 +70,17 @@ function formatTimestamp(seconds) {
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-function summarizeText(text, maxChunkSize = 10000) {
-  const chunks = [];
-  for (let i = 0; i < text.length; i += maxChunkSize) {
-    chunks.push(text.slice(i, i + maxChunkSize));
+async function summarizeText(text) {
+  // Placeholder for API-based summarization
+  if (SUMMARY_API_KEY) {
+    // Implement API call for summarization here
+    // return apiBasedSummary(text);
   }
-  
-  const summaries = chunks.map(chunk => {
-    const sentences = chunk.match(/[^\.!\?]+[\.!\?]+/g);
-    if (!sentences || sentences.length === 0) {
-      return "Unable to generate summary. Text too short or improperly formatted.";
-    }
-    const avgLength = chunk.length / sentences.length;
-    const summary = sentences.filter((sentence, index) => {
-      if (index === 0 || index === sentences.length - 1) return true;
-      if (sentence.length > avgLength) return true;
-      if (index % 5 === 0) return true;
-      return false;
-    });
-    return summary.join(' ');
-  });
 
-  return summaries.join(' ');
+  // Fallback to basic summarization
+  const sentences = text.split(/[.!?]+/);
+  const summaryLength = Math.min(5, Math.max(3, Math.floor(sentences.length / 10)));
+  return sentences.slice(0, summaryLength).join('. ') + '.';
 }
 
 function decodeHTMLEntities(text) {

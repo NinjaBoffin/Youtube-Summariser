@@ -40,6 +40,8 @@
             margin-top: 10px;
             background-color: white;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            white-space: pre-wrap;
+            word-wrap: break-word;
         }
         .timestamp {
             color: #666;
@@ -101,10 +103,7 @@
                 <h3>Summary:</h3>
                 <div id="summary">${summary}</div>
                 <h3>Full Transcript:</h3>
-                <div id="transcript">${transcript.split('\n').map(line => {
-                    const [time, ...text] = line.split(' ');
-                    return `<p><span class="timestamp">${time}</span>${text.join(' ')}</p>`;
-                }).join('')}</div>
+                <div id="transcript">${transcript}</div>
             `;
         }
     </script>
