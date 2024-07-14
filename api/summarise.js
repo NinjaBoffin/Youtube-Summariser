@@ -56,13 +56,21 @@ module.exports = async (req, res) => {
 
     const errorMessage = error.message || 'An unexpected error occurred';
 
-    res.status(500).json({
-      error: 'An error occurred in the serverless function',
-      details: errorMessage,
-      stack: error.stack,
-      name: error.name,
-      huggingFaceApiKey: HUGGINGFACE_API_KEY ? 'Set' : 'Not set'
-    });
+    if (errorMessage.includes('Rate limit reached')) {
+      res.status(429).json({
+        error: 'Rate limit reached',
+        details: 'The Hugging Face API rate limit has been reached. Please try again later or subscribe to a plan at https://huggingface.co/pricing',
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      res.status(500).json({
+        error: 'An error occurred in the serverless function',
+        details: errorMessage,
+        stack: error.stack,
+        name: error.name,
+        huggingFaceApiKey: HUGGINGFACE_API_KEY ? 'Set' : 'Not set'
+      });
+    }
   }
 };
 
