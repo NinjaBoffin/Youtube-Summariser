@@ -1,10 +1,12 @@
 const { YoutubeTranscript } = require('youtube-transcript');
 const { HfInference } = require('@huggingface/inference');
-const cache = require('./cache');
-const analytics = require('./analytics');
+const NodeCache = require('node-cache');
 
 const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
 const hf = new HfInference(HUGGINGFACE_API_KEY);
+
+const cache = new NodeCache({ stdTTL: 3600 }); // Cache for 1 hour
+const analyticsCache = new NodeCache({ stdTTL: 86400 }); // Cache for 24 hours
 
 module.exports = async (req, res) => {
   try {
@@ -46,7 +48,7 @@ module.exports = async (req, res) => {
     };
 
     cache.set(videoId, result);
-    analytics.recordUsage(videoId);
+    recordUsage(videoId);
 
     res.status(200).json(result);
   } catch (error) {
@@ -140,4 +142,9 @@ function decodeHTMLEntities(text) {
     '&amp;': '&'
   };
   return text.replace(/&#?\w+;/g, match => entities[match] || match);
+}
+
+function recordUsage(videoId) {
+  const currentCount = analyticsCache.get(videoId) || 0;
+  analyticsCache.set(videoId, currentCount + 1);
 }
