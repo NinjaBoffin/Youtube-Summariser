@@ -9,10 +9,5 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "dependencies": {
-    "node-fetch": "^3.3.2",
-    "youtube-transcript": "^1.0.6",
-    "youtube-transcript-api": "^1.0.1"
-  },
-  "type": "module"
+  "dependencies": {}
 }
