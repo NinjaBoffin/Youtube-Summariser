@@ -1,8 +1,8 @@
 const { YoutubeTranscript } = require('youtube-transcript');
+const HuggingFaceInference = require('@huggingface/inference');
 
-// Placeholder for API keys
-const SUMMARY_API_KEY = process.env.SUMMARY_API_KEY;
-const TRANSCRIPT_API_KEY = process.env.TRANSCRIPT_API_KEY;
+const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
+const hf = new HuggingFaceInference(HUGGINGFACE_API_KEY);
 
 module.exports = async (req, res) => {
   try {
@@ -71,16 +71,21 @@ function formatTimestamp(seconds) {
 }
 
 async function summarizeText(text) {
-  // Placeholder for API-based summarization
-  if (SUMMARY_API_KEY) {
-    // Implement API call for summarization here
-    // return apiBasedSummary(text);
+  try {
+    const result = await hf.summarization({
+      model: 'facebook/bart-large-cnn',
+      inputs: text,
+      parameters: {
+        max_length: 150,
+        min_length: 30,
+        do_sample: false
+      }
+    });
+    return result.summary_text;
+  } catch (error) {
+    console.error('Summarization error:', error);
+    return 'Failed to generate summary. ' + error.message;
   }
-
-  // Fallback to basic summarization
-  const sentences = text.split(/[.!?]+/);
-  const summaryLength = Math.min(5, Math.max(3, Math.floor(sentences.length / 10)));
-  return sentences.slice(0, summaryLength).join('. ') + '.';
 }
 
 function decodeHTMLEntities(text) {
