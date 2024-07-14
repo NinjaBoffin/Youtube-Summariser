@@ -53,7 +53,7 @@ module.exports = async (req, res) => {
     res.status(200).json(result);
   } catch (error) {
     console.error('Error in serverless function:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'An error occurred in the serverless function',
       details: error.message,
       stack: error.stack,
