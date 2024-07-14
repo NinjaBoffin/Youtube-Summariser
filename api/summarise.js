@@ -29,8 +29,8 @@ module.exports = async (req, res) => {
     console.log('Summary generated, length:', summary.length);
 
     res.status(200).json({ 
-      transcript: transcript.map(item => `${item.timestamp} ${item.text}`).join('\n'),
-      summary: summary,
+      transcript: transcript.map(item => `${item.timestamp} ${decodeHTMLEntities(item.text)}`).join('\n'),
+      summary: decodeHTMLEntities(summary),
       message: `Transcript fetched and summarized for video: ${videoId}`,
       timestamp: new Date().toISOString()
     });
