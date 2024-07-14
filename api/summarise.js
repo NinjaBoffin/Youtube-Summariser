@@ -21,12 +21,13 @@ module.exports = async (req, res) => {
     const transcript = await fetchTranscript(videoId);
     console.log('Transcript fetched, length:', transcript.length);
 
-    const summary = summarizeText(transcript);
+    // Change this line to pass only the text to summarizeText
+    const summary = summarizeText(transcript.map(item => item.text).join(' '));
     console.log('Summary generated, length:', summary.length);
 
     res.status(200).json({ 
-      transcript,
-      summary,
+      transcript: decodeHTMLEntities(transcript.map(item => `${item.timestamp} ${item.text}`).join('\n')),
+      summary: decodeHTMLEntities(summary),
       message: `Transcript fetched and summarized for video: ${videoId}`,
       timestamp: new Date().toISOString()
     });
@@ -49,11 +50,21 @@ function extractVideoId(url) {
 async function fetchTranscript(videoId) {
   try {
     const transcriptArray = await YoutubeTranscript.fetchTranscript(videoId);
-    return transcriptArray.map(item => item.text).join(' ');
+    return transcriptArray.map(item => ({
+      text: item.text,
+      timestamp: formatTimestamp(item.offset / 1000)
+    }));
   } catch (error) {
     console.error('Error fetching transcript:', error);
     throw new Error(`Failed to fetch transcript: ${error.message}`);
   }
+}
+
+function formatTimestamp(seconds) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
 function summarizeText(text) {
@@ -80,4 +91,16 @@ function summarizeText(text) {
 
   // Join the selected sentences
   return summary.join(' ');
+}
+
+// Move this function outside of summarizeText
+function decodeHTMLEntities(text) {
+  const entities = {
+    '&#39;': "'",
+    '&quot;': '"',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&amp;': '&'
+  };
+  return text.replace(/&#?\w+;/g, match => entities[match] || match);
 }
