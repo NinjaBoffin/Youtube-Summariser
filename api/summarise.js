@@ -8,6 +8,8 @@ const hf = new HfInference(HUGGINGFACE_API_KEY);
 const cache = new NodeCache({ stdTTL: 3600 }); // Cache for 1 hour
 const analyticsCache = new NodeCache({ stdTTL: 86400 }); // Cache for 24 hours
 
+const SUMMARY_TIMEOUT = 55000; // 55 seconds to stay within the 60-second limit
+
 module.exports = async (req, res) => {
   try {
     const { url } = req.query;
@@ -37,7 +39,7 @@ module.exports = async (req, res) => {
 
     validateVideoLength(transcript);
 
-    const summary = await summarizeText(transcript.map(item => item.text).join(' '));
+    const summary = await summarizeTextWithTimeout(transcript.map(item => item.text).join(' '));
     console.log('Summary generated, length:', summary.length);
 
     const result = {
@@ -66,6 +68,12 @@ module.exports = async (req, res) => {
       res.status(504).json({
         error: 'Timeout',
         details: 'The request timed out. Please try again with a shorter text or increase the timeout limit.',
+        timestamp: new Date().toISOString()
+      });
+    } else if (errorMessage.includes('blob')) {
+      res.status(500).json({
+        error: 'Hugging Face API error',
+        details: 'An error occurred while fetching the blob from the Hugging Face API. Please try again later.',
         timestamp: new Date().toISOString()
       });
     } else {
@@ -108,7 +116,7 @@ function formatTimestamp(seconds) {
 
 function summarizeTextWithTimeout(text) {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('Timeout')), 55000); // 55 seconds to stay within the 60-second limit
+    const timeout = setTimeout(() => reject(new Error('Timeout')), SUMMARY_TIMEOUT);
     
     summarizeText(text)
       .then(result => {

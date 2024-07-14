@@ -1,7 +1,7 @@
 {
     "functions": {
       "api/summarise.js": {
-        "maxDuration": 600
+        "maxDuration": 60
       }
     }
   }
