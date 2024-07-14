@@ -54,7 +54,9 @@ module.exports = async (req, res) => {
     res.status(500).json({ 
       error: 'An error occurred in the serverless function',
       details: error.message,
-      stack: error.stack
+      stack: error.stack,
+      name: error.name,
+      huggingFaceApiKey: HUGGINGFACE_API_KEY ? 'Set' : 'Not set'
     });
   }
 };
@@ -88,6 +90,9 @@ function formatTimestamp(seconds) {
 async function summarizeText(text) {
   try {
     console.log('Attempting to summarize text...');
+    if (!HUGGINGFACE_API_KEY) {
+      throw new Error('HUGGINGFACE_API_KEY is not set');
+    }
     const chunks = splitTextIntoChunks(text, 1000);
     const summaries = await Promise.all(chunks.map(async (chunk) => {
       const result = await hf.summarization({
@@ -105,7 +110,7 @@ async function summarizeText(text) {
     return summaries.join(' ');
   } catch (error) {
     console.error('Summarization error:', error);
-    return 'Failed to generate summary. ' + error.message;
+    throw new Error('Failed to generate summary: ' + error.message);
   }
 }
 
