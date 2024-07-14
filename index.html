@@ -5,32 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YouTube Video Summariser</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            margin: 0;
-            padding: 20px;
-            max-width: 800px;
-            margin: 0 auto;
-        }
-        h1 {
-            color: #333;
-        }
-        #videoInput {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 10px;
-        }
-        #submitBtn {
-            padding: 10px 20px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-        #result {
-            margin-top: 20px;
-        }
+        /* ... (keep your existing styles) ... */
     </style>
 </head>
 <body>
@@ -38,6 +13,7 @@
     <input type="text" id="videoInput" placeholder="Enter YouTube video URL">
     <button id="submitBtn">Summarise</button>
     <div id="result"></div>
+    <div id="debug"></div>
 
     <script>
         document.getElementById('submitBtn').addEventListener('click', async function() {
@@ -51,11 +27,18 @@
 
         async function summariseVideo(url) {
             const resultDiv = document.getElementById('result');
+            const debugDiv = document.getElementById('debug');
             resultDiv.innerHTML = 'Processing...';
+            debugDiv.innerHTML = '';
 
             try {
+                debugDiv.innerHTML += `Sending request to: /api/summarise?url=${encodeURIComponent(url)}<br>`;
                 const response = await fetch(`/api/summarise?url=${encodeURIComponent(url)}`);
+                debugDiv.innerHTML += `Response status: ${response.status}<br>`;
+                debugDiv.innerHTML += `Response OK: ${response.ok}<br>`;
+                
                 const data = await response.json();
+                debugDiv.innerHTML += `Response data: ${JSON.stringify(data)}<br>`;
 
                 if (response.ok) {
                     displayResults(data.transcript, data.summary);
@@ -64,6 +47,7 @@
                 }
             } catch (error) {
                 resultDiv.innerHTML = `Error: ${error.message}`;
+                debugDiv.innerHTML += `Caught error: ${error.toString()}<br>`;
                 console.error('Error:', error);
             }
         }
