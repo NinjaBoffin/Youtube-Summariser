@@ -12,6 +12,7 @@
             padding: 20px;
             max-width: 800px;
             margin: 0 auto;
+            background-color: #f4f4f4;
         }
         h1, h2, h3 {
             color: #333;
@@ -32,11 +33,18 @@
             margin-top: 20px;
         }
         #transcript, #summary {
-            max-height: 300px;
+            max-height: 400px;
             overflow-y: auto;
             border: 1px solid #ddd;
-            padding: 10px;
+            padding: 15px;
             margin-top: 10px;
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .timestamp {
+            color: #666;
+            font-weight: bold;
+            margin-right: 10px;
         }
     </style>
 </head>
@@ -93,7 +101,10 @@
                 <h3>Summary:</h3>
                 <div id="summary">${summary}</div>
                 <h3>Full Transcript:</h3>
-                <div id="transcript">${transcript}</div>
+                <div id="transcript">${transcript.split('\n').map(line => {
+                    const [time, ...text] = line.split(' ');
+                    return `<p><span class="timestamp">${time}</span>${text.join(' ')}</p>`;
+                }).join('')}</div>
             `;
         }
     </script>
