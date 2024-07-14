@@ -4,58 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YouTube Video Summariser</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            margin: 0;
-            padding: 20px;
-            max-width: 800px;
-            margin: 0 auto;
-            background-color: #f4f4f4;
-        }
-        h1, h2, h3 {
-            color: #333;
-        }
-        #videoInput {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 10px;
-        }
-        #submitBtn {
-            padding: 10px 20px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-        #result, #debug {
-            margin-top: 20px;
-        }
-        #transcript, #summary {
-            max-height: 400px;
-            overflow-y: auto;
-            border: 1px solid #ddd;
-            padding: 15px;
-            margin-top: 10px;
-            background-color: white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
-        .timestamp {
-            color: #666;
-            font-weight: bold;
-            margin-right: 10px;
-        }
-    </style>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
-<body>
-    <h1>YouTube Video Summariser</h1>
-    <input type="text" id="videoInput" placeholder="Enter YouTube video URL">
-    <button id="submitBtn">Summarise</button>
-    <div id="result"></div>
-    <div id="debug"></div>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-3xl mx-auto">
+        <h1 class="text-3xl font-bold mb-8 text-center">YouTube Video Summariser</h1>
+        <div class="mb-4">
+            <input type="text" id="videoInput" placeholder="Enter YouTube video URL" class="w-full p-2 border rounded">
+        </div>
+        <button id="submitBtn" class="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600">Summarise</button>
+        <div id="result" class="mt-8"></div>
+        <div id="debug" class="mt-4 text-sm text-gray-500"></div>
+    </div>
 
     <script>
         document.getElementById('submitBtn').addEventListener('click', async function() {
@@ -97,13 +57,15 @@
         function displayResults(transcript, summary, message, timestamp) {
             const resultDiv = document.getElementById('result');
             resultDiv.innerHTML = `
-                <h2>Result:</h2>
-                <p>${message}</p>
-                <p>Timestamp: ${timestamp}</p>
-                <h3>Summary:</h3>
-                <div id="summary">${summary}</div>
-                <h3>Full Transcript:</h3>
-                <div id="transcript">${transcript}</div>
+                <div class="bg-white p-6 rounded shadow">
+                    <h2 class="text-xl font-semibold mb-2">Result:</h2>
+                    <p class="mb-2">${message}</p>
+                    <p class="mb-4 text-sm text-gray-600">Timestamp: ${timestamp}</p>
+                    <h3 class="text-lg font-semibold mb-2">Summary:</h3>
+                    <div class="bg-gray-100 p-4 rounded mb-4">${summary}</div>
+                    <h3 class="text-lg font-semibold mb-2">Full Transcript:</h3>
+                    <div class="bg-gray-100 p-4 rounded max-h-96 overflow-y-auto">${transcript.split('\n').map(line => `<p>${line}</p>`).join('')}</div>
+                </div>
             `;
         }
     </script>

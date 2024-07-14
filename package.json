@@ -9,7 +9,8 @@
   },
   "dependencies": {
     "youtube-transcript": "^1.0.6",
-    "@huggingface/inference": "^2.6.1"
+    "@huggingface/inference": "^2.6.1",
+    "node-cache": "^5.1.2"
   },
   "author": "Boffin & Claude",
   "license": "ISC"
