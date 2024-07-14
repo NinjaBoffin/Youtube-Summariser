@@ -1,6 +1,6 @@
-const { YoutubeTranscript } = require('youtube-transcript-api');
+import { YoutubeTranscript } from 'youtube-transcript-api';
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   try {
     const { url } = req.query;
 
@@ -39,7 +39,7 @@ module.exports = async (req, res) => {
       name: error.name
     });
   }
-};
+}
 
 function extractVideoId(url) {
   const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
