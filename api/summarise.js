@@ -4,11 +4,19 @@ module.exports = async (req, res) => {
   try {
     const { url } = req.query;
 
+    console.log('Received URL:', url);
+
     if (!url) {
       return res.status(400).json({ error: 'Missing URL parameter' });
     }
 
     const videoId = extractVideoId(url);
+    console.log('Extracted Video ID:', videoId);
+
+    if (!videoId) {
+      return res.status(400).json({ error: 'Invalid YouTube URL' });
+    }
+
     const transcript = await fetchTranscript(videoId);
     const summary = await summariseText(transcript);
 
@@ -22,7 +30,8 @@ module.exports = async (req, res) => {
     console.error('Error in serverless function:', error);
     res.status(500).json({ 
       error: 'An error occurred in the serverless function',
-      details: error.message
+      details: error.message,
+      stack: error.stack
     });
   }
 };
@@ -35,9 +44,12 @@ function extractVideoId(url) {
 
 async function fetchTranscript(videoId) {
   try {
+    console.log('Fetching transcript for video:', videoId);
     const transcriptArray = await YoutubeTranscript.fetchTranscript(videoId);
+    console.log('Transcript fetched successfully');
     return transcriptArray.map(item => item.text).join(' ');
   } catch (error) {
+    console.error('Error fetching transcript:', error);
     throw new Error(`Failed to fetch transcript: ${error.message}`);
   }
 }
