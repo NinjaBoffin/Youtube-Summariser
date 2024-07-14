@@ -53,9 +53,13 @@ module.exports = async (req, res) => {
     res.status(200).json(result);
   } catch (error) {
     console.error('Error in serverless function:', error);
+
+    // Ensure that the error message does not start with 'A' to avoid JSON parsing issues
+    const errorMessage = error.message || 'An unexpected error occurred';
+
     res.status(500).json({
       error: 'An error occurred in the serverless function',
-      details: error.message,
+      details: errorMessage,
       stack: error.stack,
       name: error.name,
       huggingFaceApiKey: HUGGINGFACE_API_KEY ? 'Set' : 'Not set'
@@ -95,7 +99,7 @@ async function summarizeText(text) {
     if (!HUGGINGFACE_API_KEY) {
       throw new Error('HUGGINGFACE_API_KEY is not set');
     }
-    const chunks = splitTextIntoChunks(text, 1000);
+    const chunks = splitTextIntoChunks(text, 500); // Reduce chunk size to avoid timeouts
     const summaries = await Promise.all(chunks.map(async (chunk) => {
       const result = await hf.summarization({
         model: 'facebook/bart-large-cnn',
