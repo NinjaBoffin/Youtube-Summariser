@@ -21,9 +21,13 @@ module.exports = async (req, res) => {
     const transcript = await fetchTranscript(videoId);
     console.log('Transcript fetched, length:', transcript.length);
 
+    const summary = summarizeText(transcript);
+    console.log('Summary generated, length:', summary.length);
+
     res.status(200).json({ 
       transcript,
-      message: `Transcript fetched for video: ${videoId}`,
+      summary,
+      message: `Transcript fetched and summarized for video: ${videoId}`,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
@@ -50,4 +54,30 @@ async function fetchTranscript(videoId) {
     console.error('Error fetching transcript:', error);
     throw new Error(`Failed to fetch transcript: ${error.message}`);
   }
+}
+
+function summarizeText(text) {
+  // Split the text into sentences
+  const sentences = text.match(/[^\.!\?]+[\.!\?]+/g);
+
+  if (!sentences || sentences.length === 0) {
+    return "Unable to generate summary. Text too short or improperly formatted.";
+  }
+
+  // Calculate the average sentence length
+  const avgLength = text.length / sentences.length;
+
+  // Select sentences for the summary
+  const summary = sentences.filter((sentence, index) => {
+    // Include the first and last sentence
+    if (index === 0 || index === sentences.length - 1) return true;
+    // Include sentences that are longer than average (likely more informative)
+    if (sentence.length > avgLength) return true;
+    // Include every 5th sentence for coverage
+    if (index % 5 === 0) return true;
+    return false;
+  });
+
+  // Join the selected sentences
+  return summary.join(' ');
 }
