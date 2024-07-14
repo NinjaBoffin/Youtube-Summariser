@@ -1,8 +1,8 @@
 const { YoutubeTranscript } = require('youtube-transcript');
-const HuggingFaceInference = require('@huggingface/inference');
+const { HfInference } = require('@huggingface/inference');
 
 const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
-const hf = new HuggingFaceInference(HUGGINGFACE_API_KEY);
+const hf = new HfInference(HUGGINGFACE_API_KEY);
 
 module.exports = async (req, res) => {
   try {
@@ -72,15 +72,17 @@ function formatTimestamp(seconds) {
 
 async function summarizeText(text) {
   try {
+    console.log('Attempting to summarize text...');
     const result = await hf.summarization({
       model: 'facebook/bart-large-cnn',
-      inputs: text,
+      inputs: text.slice(0, 1000), // Limit input to 1000 characters for this test
       parameters: {
         max_length: 150,
         min_length: 30,
         do_sample: false
       }
     });
+    console.log('Summarization successful');
     return result.summary_text;
   } catch (error) {
     console.error('Summarization error:', error);
