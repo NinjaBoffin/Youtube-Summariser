@@ -54,7 +54,6 @@ module.exports = async (req, res) => {
   } catch (error) {
     console.error('Error in serverless function:', error);
 
-    // Ensure that the error message does not start with 'A' to avoid JSON parsing issues
     const errorMessage = error.message || 'An unexpected error occurred';
 
     res.status(500).json({
@@ -101,16 +100,21 @@ async function summarizeText(text) {
     }
     const chunks = splitTextIntoChunks(text, 500); // Reduce chunk size to avoid timeouts
     const summaries = await Promise.all(chunks.map(async (chunk) => {
-      const result = await hf.summarization({
-        model: 'facebook/bart-large-cnn',
-        inputs: chunk,
-        parameters: {
-          max_length: 150,
-          min_length: 30,
-          do_sample: false
-        }
-      });
-      return result.summary_text;
+      try {
+        const result = await hf.summarization({
+          model: 'facebook/bart-large-cnn',
+          inputs: chunk,
+          parameters: {
+            max_length: 150,
+            min_length: 30,
+            do_sample: false
+          }
+        });
+        return result.summary_text;
+      } catch (hfError) {
+        console.error('Hugging Face API error:', hfError);
+        throw new Error(`Hugging Face API error: ${hfError.message}`);
+      }
     }));
     console.log('Summarization successful');
     return summaries.join(' ');
