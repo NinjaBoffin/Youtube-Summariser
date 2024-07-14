@@ -112,6 +112,9 @@ async function summarizeText(text) {
         });
         return result.summary_text;
       } catch (hfError) {
+        if (hfError.message.includes('Rate limit reached')) {
+          throw new Error('Hugging Face API error: Rate limit reached. You reached free usage limit (reset hourly). Please subscribe to a plan at https://huggingface.co/pricing to use the API at this rate');
+        }
         console.error('Hugging Face API error:', hfError);
         throw new Error(`Hugging Face API error: ${hfError.message}`);
       }
