@@ -50,7 +50,7 @@ module.exports = async (req, res) => {
     console.log('Structured summary generated');
 
     const result = {
-      transcript: transcript.map(item => `${item.timestamp} ${decodeHTMLEntities(item.text)}`).join('\n'),
+      transcript: formatTranscript(transcript),
       summary: structuredSummary,
       message: `Transcript fetched and summarized for video: ${videoId}`,
       timestamp: new Date().toISOString()
@@ -98,7 +98,6 @@ function formatTimestamp(seconds) {
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-// Segment the transcript into chunks of approximately 300 words
 function segmentTranscript(transcript) {
   const segments = [];
   let currentSegment = [];
@@ -122,7 +121,6 @@ function segmentTranscript(transcript) {
   return segments;
 }
 
-// Summarize each segment, handling errors for individual segments
 async function summarizeSegments(segments) {
   const summaries = [];
 
@@ -179,7 +177,6 @@ async function summarizeText(text) {
   }
 }
 
-// Structure the summary into chapters with bullet points
 function structureSummary(summaries) {
   let structuredSummary = "Video Summary:\n\n";
 
@@ -187,7 +184,7 @@ function structureSummary(summaries) {
     structuredSummary += `Chapter ${index + 1}:\n`;
     const points = extractKeyPoints(summary);
     points.forEach(point => {
-      structuredSummary += `- ${point}\n`;
+      structuredSummary += `  • ${point}\n`;
     });
     structuredSummary += '\n';
   });
@@ -195,11 +192,13 @@ function structureSummary(summaries) {
   return structuredSummary;
 }
 
-// Extract key points from a summary (simple sentence splitting)
 function extractKeyPoints(summary) {
-  // This is a simple implementation. You might want to use NLP techniques for better results.
   const sentences = summary.split(/[.!?]+/).filter(s => s.trim().length > 0);
-  return sentences.map(s => s.trim());
+  return sentences.map(s => capitalizeFirstLetter(decodeHTMLEntities(s.trim())));
+}
+
+function capitalizeFirstLetter(string) {
+  return string.charAt(0).toUpperCase() + string.slice(1);
 }
 
 function handleError(res, error) {
@@ -228,7 +227,6 @@ function handleError(res, error) {
     responseBody.details = 'An error occurred while fetching the blob from the Hugging Face API. Please try again later.';
   }
 
-  // Add additional debug information in non-production environments
   if (process.env.NODE_ENV !== 'production') {
     responseBody.stack = error.stack;
     responseBody.name = error.name;
@@ -251,9 +249,19 @@ function decodeHTMLEntities(text) {
     '&quot;': '"',
     '&lt;': '<',
     '&gt;': '>',
-    '&amp;': '&'
+    '&amp;': '&',
+    '&#x27;': "'"
   };
-  return text.replace(/&#?\w+;/g, match => entities[match] || match);
+  return text.replace(/&([^;]+);/g, function(match, entity) {
+    return entities[match] || match;
+  });
+}
+
+function formatTranscript(transcript) {
+  return transcript.map(item => {
+    const decodedText = decodeHTMLEntities(item.text);
+    return `[${item.timestamp}] ${decodedText}`;
+  }).join('\n');
 }
 
 function recordUsage(videoId) {
