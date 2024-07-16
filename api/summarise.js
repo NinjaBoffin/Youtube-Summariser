@@ -148,30 +148,22 @@ function segmentTranscript(transcript) {
   const segments = [];
   let currentSegment = [];
   let currentDuration = 0;
-  let segmentStart = 0;
+  let segmentStart = transcript[0].start;
 
   for (const item of transcript) {
     currentSegment.push(item);
     currentDuration += item.duration;
 
-    if (currentDuration >= segmentDuration) {
+    if (currentDuration >= segmentDuration || item === transcript[transcript.length - 1]) {
       segments.push({
         text: currentSegment.map(i => i.text).join(' '),
         start: segmentStart,
-        end: segmentStart + currentDuration
+        end: item.start + item.duration
       });
       currentSegment = [];
-      segmentStart += currentDuration;
+      segmentStart = item.start + item.duration;
       currentDuration = 0;
     }
-  }
-
-  if (currentSegment.length > 0) {
-    segments.push({
-      text: currentSegment.map(i => i.text).join(' '),
-      start: segmentStart,
-      end: segmentStart + currentDuration
-    });
   }
 
   return segments.slice(0, MAX_SEGMENTS);
