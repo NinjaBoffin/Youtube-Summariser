@@ -257,12 +257,21 @@ function handleError(res, error) {
   } else if (errorMessage.includes('blob')) {
     responseBody.error = 'Hugging Face API error';
     responseBody.details = 'An error occurred while fetching the blob from the Hugging Face API. Please try again later.';
+  } else if (errorMessage.includes('Failed to fetch transcript')) {
+    statusCode = 404;
+    responseBody.error = 'Transcript not found';
+    responseBody.details = 'Unable to fetch the transcript for this video. It may not be available or the video might be private.';
+  } else if (errorMessage.includes('Video transcript is too long')) {
+    statusCode = 413;
+    responseBody.error = 'Video too long';
+    responseBody.details = errorMessage;
   }
 
   if (process.env.NODE_ENV !== 'production') {
     responseBody.stack = error.stack;
     responseBody.name = error.name;
     responseBody.huggingFaceApiKey = HUGGINGFACE_API_KEY ? 'Set' : 'Not set';
+    responseBody.youtubeApiKey = YOUTUBE_API_KEY ? 'Set' : 'Not set';
   }
 
   return res.status(statusCode).json(responseBody);
