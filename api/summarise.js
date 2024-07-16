@@ -54,11 +54,17 @@ module.exports = async (req, res) => {
     console.log('Fetching transcript');
     const transcript = await fetchTranscript(videoId);
     console.log('Transcript fetched, length:', transcript.length);
+    console.log('First transcript item:', JSON.stringify(transcript[0]));
+    console.log('Last transcript item:', JSON.stringify(transcript[transcript.length - 1]));
 
     validateVideoLength(transcript);
 
     console.log('Segmenting transcript');
     const segments = segmentTranscript(transcript);
+    console.log('Segments created:', segments.length);
+    console.log('First segment:', JSON.stringify(segments[0]));
+    console.log('Last segment:', JSON.stringify(segments[segments.length - 1]));
+
     console.log('Summarizing segments');
     const summaries = await summarizeSegments(segments);
     console.log('Structuring summary');
@@ -118,6 +124,9 @@ function extractVideoId(url) {
 async function fetchTranscript(videoId) {
   try {
     const transcriptArray = await YoutubeTranscript.fetchTranscript(videoId);
+    if (!transcriptArray || transcriptArray.length === 0) {
+      throw new Error('Empty transcript returned');
+    }
     return transcriptArray.map(item => ({
       text: decodeHTMLEntities(item.text),
       start: item.offset,
@@ -130,8 +139,14 @@ async function fetchTranscript(videoId) {
 }
 
 function segmentTranscript(transcript) {
+  if (!transcript || transcript.length === 0) {
+    throw new Error('Invalid transcript: empty or undefined');
+  }
+
   const totalDuration = transcript.reduce((sum, item) => sum + item.duration, 0);
   const segmentDuration = Math.ceil(totalDuration / MAX_SEGMENTS);
+
+  console.log('Total duration:', totalDuration, 'Segment duration:', segmentDuration);
 
   const segments = [];
   let currentSegment = [];
@@ -148,6 +163,7 @@ function segmentTranscript(transcript) {
         start: segmentStart,
         end: item.start + item.duration
       });
+      console.log('Segment created:', JSON.stringify(segments[segments.length - 1]));
       currentSegment = [];
       segmentStart = item.start + item.duration;
       currentDuration = 0;
@@ -228,24 +244,10 @@ function structureSummary(summaries) {
     const formattedStart = formatTimestamp(summary.start);
     const formattedEnd = formatTimestamp(summary.end);
     structuredSummary += `Chapter ${index + 1} [${formattedStart} - ${formattedEnd}]:\n${summary.summary}\n\n`;
+    console.log(`Chapter ${index + 1} timestamps:`, formattedStart, '-', formattedEnd);
   });
 
   return structuredSummary;
-}
-
-function formatTimestamp(milliseconds) {
-  const totalSeconds = Math.floor(milliseconds / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-}
-
-function formatTranscript(transcript) {
-  return transcript.map(item => {
-    const formattedTime = formatTimestamp(item.start);
-    return `[${formattedTime}] ${item.text}`;
-  }).join('\n');
 }
 
 function extractKeyPoints(summary) {
@@ -322,6 +324,25 @@ function validateVideoLength(transcript) {
   if (transcript.length > MAX_TRANSCRIPT_LENGTH) {
     throw new Error(`Video transcript is too long (${transcript.length} characters). Maximum allowed is ${MAX_TRANSCRIPT_LENGTH} characters.`);
   }
+}
+
+function formatTimestamp(milliseconds) {
+  if (typeof milliseconds !== 'number' || isNaN(milliseconds)) {
+    console.error('Invalid milliseconds value:', milliseconds);
+    return '00:00:00';
+  }
+  const totalSeconds = Math.floor(milliseconds / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function formatTranscript(transcript) {
+  return transcript.map(item => {
+    const formattedTime = formatTimestamp(item.start);
+    return `[${formattedTime}] ${item.text}`;
+  }).join('\n');
 }
 
 function decodeHTMLEntities(text) {
