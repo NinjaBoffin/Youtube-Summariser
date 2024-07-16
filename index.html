@@ -3,71 +3,77 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube Video Summariser</title>
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <title>YouTube Video Summarizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .summary-content {
+            white-space: pre-wrap;
+            font-family: 'Arial', sans-serif;
+        }
+        .transcript-content {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
 </head>
-<body class="bg-gray-100 p-8">
-    <div class="max-w-3xl mx-auto">
-        <h1 class="text-3xl font-bold mb-8 text-center">YouTube Video Summariser</h1>
-        <div class="mb-4">
-            <input type="text" id="videoInput" placeholder="Enter YouTube video URL" class="w-full p-2 border rounded">
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-4xl">
+        <h1 class="text-3xl font-bold mb-6 text-center">YouTube Video Summarizer</h1>
+        <form id="summarize-form" class="mb-6">
+            <input type="url" id="video-url" placeholder="Enter YouTube Video URL" required
+                   class="w-full p-2 border border-gray-300 rounded mb-4">
+            <button type="submit" class="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600 transition-colors">
+                Summarize
+            </button>
+        </form>
+        <div id="loading" class="hidden text-center">
+            <p class="text-gray-600">Summarizing video... This may take a moment.</p>
         </div>
-        <button id="submitBtn" class="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600">Summarise</button>
-        <div id="result" class="mt-8"></div>
-        <div id="debug" class="mt-4 text-sm text-gray-500"></div>
+        <div id="error" class="hidden text-red-500 mb-4"></div>
+        <div id="result" class="hidden">
+            <div class="mb-6">
+                <h2 class="text-xl font-semibold mb-2">Summary:</h2>
+                <div id="summary-text" class="summary-content bg-gray-50 p-4 rounded"></div>
+            </div>
+            <div>
+                <h2 class="text-xl font-semibold mb-2">Transcript:</h2>
+                <div id="transcript-text" class="transcript-content bg-gray-50 p-4 rounded"></div>
+            </div>
+        </div>
     </div>
 
     <script>
-        document.getElementById('submitBtn').addEventListener('click', async function() {
-            const videoUrl = document.getElementById('videoInput').value;
-            if (videoUrl) {
-                await summariseVideo(videoUrl);
-            } else {
-                alert('Please enter a valid YouTube video URL');
-            }
-        });
+        document.getElementById('summarize-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const url = document.getElementById('video-url').value;
+            const loadingElement = document.getElementById('loading');
+            const errorElement = document.getElementById('error');
+            const resultElement = document.getElementById('result');
+            const summaryTextElement = document.getElementById('summary-text');
+            const transcriptTextElement = document.getElementById('transcript-text');
 
-        async function summariseVideo(url) {
-            const resultDiv = document.getElementById('result');
-            const debugDiv = document.getElementById('debug');
-            resultDiv.innerHTML = 'Processing...';
-            debugDiv.innerHTML = '';
+            loadingElement.classList.remove('hidden');
+            errorElement.classList.add('hidden');
+            resultElement.classList.add('hidden');
 
             try {
-                debugDiv.innerHTML += `Sending request to: /api/summarise?url=${encodeURIComponent(url)}<br>`;
                 const response = await fetch(`/api/summarise?url=${encodeURIComponent(url)}`);
-                debugDiv.innerHTML += `Response status: ${response.status}<br>`;
-                debugDiv.innerHTML += `Response OK: ${response.ok}<br>`;
-                
                 const data = await response.json();
-                debugDiv.innerHTML += `Response data: ${JSON.stringify(data)}<br>`;
 
                 if (response.ok) {
-                    displayResults(data.transcript, data.summary, data.message, data.timestamp);
+                    summaryTextElement.textContent = data.summary;
+                    transcriptTextElement.textContent = data.transcript;
+                    resultElement.classList.remove('hidden');
                 } else {
-                    throw new Error(data.error || 'An error occurred');
+                    throw new Error(data.error || 'An error occurred during summarization');
                 }
             } catch (error) {
-                resultDiv.innerHTML = `Error: ${error.message}`;
-                debugDiv.innerHTML += `Caught error: ${error.toString()}<br>`;
-                console.error('Error:', error);
+                errorElement.textContent = error.message;
+                errorElement.classList.remove('hidden');
+            } finally {
+                loadingElement.classList.add('hidden');
             }
-        }
-
-        function displayResults(transcript, summary, message, timestamp) {
-            const resultDiv = document.getElementById('result');
-            resultDiv.innerHTML = `
-                <div class="bg-white p-6 rounded shadow">
-                    <h2 class="text-xl font-semibold mb-2">Result:</h2>
-                    <p class="mb-2">${message}</p>
-                    <p class="mb-4 text-sm text-gray-600">Timestamp: ${timestamp}</p>
-                    <h3 class="text-lg font-semibold mb-2">Summary:</h3>
-                    <div class="bg-gray-100 p-4 rounded mb-4">${summary}</div>
-                    <h3 class="text-lg font-semibold mb-2">Full Transcript:</h3>
-                    <div class="bg-gray-100 p-4 rounded max-h-96 overflow-y-auto">${transcript.split('\n').map(line => `<p>${line}</p>`).join('')}</div>
-                </div>
-            `;
-        }
+        });
     </script>
 </body>
 </html>

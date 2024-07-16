@@ -1,14 +1,17 @@
 const { YoutubeTranscript } = require('youtube-transcript');
 const { HfInference } = require('@huggingface/inference');
 const NodeCache = require('node-cache');
+const axios = require('axios');
+const natural = require('natural');
 
 const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 const hf = new HfInference(HUGGINGFACE_API_KEY);
 
-const cache = new NodeCache({ stdTTL: 3600 }); // Cache for 1 hour
-const analyticsCache = new NodeCache({ stdTTL: 86400 }); // Cache for 24 hours
+const cache = new NodeCache({ stdTTL: 3600 });
+const analyticsCache = new NodeCache({ stdTTL: 86400 });
 
-const SUMMARY_TIMEOUT = 55000; // 55 seconds to stay within the 60-second limit
+const SUMMARY_TIMEOUT = 55000;
 
 module.exports = async (req, res) => {
   try {
@@ -16,11 +19,7 @@ module.exports = async (req, res) => {
 
     console.log('Function invoked with URL:', url);
 
-    if (!url) {
-      return res.status(400).json({ error: 'Missing URL parameter' });
-    }
-
-    if (!isValidYouTubeUrl(url)) {
+    if (!url || !isValidYouTubeUrl(url)) {
       return res.status(400).json({ error: 'Invalid YouTube URL' });
     }
 
@@ -37,7 +36,9 @@ module.exports = async (req, res) => {
       return res.status(200).json(cachedResult);
     }
 
-    console.log('Fetching transcript for video:', videoId);
+    const metadata = await fetchVideoMetadata(videoId);
+    console.log('Fetched video metadata');
+
     const transcript = await fetchTranscript(videoId);
     console.log('Transcript fetched, length:', transcript.length);
 
@@ -46,12 +47,15 @@ module.exports = async (req, res) => {
     const segments = segmentTranscript(transcript);
     const summaries = await summarizeSegments(segments);
     const structuredSummary = structureSummary(summaries);
+    const keyPoints = extractKeyPoints(structuredSummary);
 
-    console.log('Structured summary generated');
+    console.log('Structured summary and key points generated');
 
     const result = {
+      metadata,
       transcript: formatTranscript(transcript),
       summary: structuredSummary,
+      keyPoints,
       message: `Transcript fetched and summarized for video: ${videoId}`,
       timestamp: new Date().toISOString()
     };
@@ -66,7 +70,18 @@ module.exports = async (req, res) => {
   }
 };
 
-// Improved YouTube URL validation
+async function fetchVideoMetadata(videoId) {
+  const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${YOUTUBE_API_KEY}`;
+  const response = await axios.get(url);
+  const videoData = response.data.items[0];
+  return {
+    title: videoData.snippet.title,
+    description: videoData.snippet.description,
+    publishedAt: videoData.snippet.publishedAt,
+    duration: videoData.contentDetails.duration
+  };
+}
+
 function isValidYouTubeUrl(url) {
   const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.?be)\/.+$/;
   return youtubeRegex.test(url);
@@ -83,7 +98,8 @@ async function fetchTranscript(videoId) {
     const transcriptArray = await YoutubeTranscript.fetchTranscript(videoId);
     return transcriptArray.map(item => ({
       text: item.text,
-      timestamp: formatTimestamp(item.offset / 1000)
+      start: item.offset,
+      duration: item.duration
     }));
   } catch (error) {
     console.error('Error fetching transcript:', error);
@@ -91,31 +107,35 @@ async function fetchTranscript(videoId) {
   }
 }
 
-function formatTimestamp(seconds) {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-}
-
 function segmentTranscript(transcript) {
   const segments = [];
   let currentSegment = [];
   let wordCount = 0;
+  let segmentStart = 0;
 
   for (const item of transcript) {
     currentSegment.push(item);
     wordCount += item.text.split(' ').length;
 
     if (wordCount >= 300 || item.text.endsWith('.')) {
-      segments.push(currentSegment);
+      segments.push({
+        text: currentSegment.map(i => i.text).join(' '),
+        start: segmentStart,
+        end: item.start + item.duration
+      });
       currentSegment = [];
       wordCount = 0;
+      segmentStart = item.start + item.duration;
     }
   }
 
   if (currentSegment.length > 0) {
-    segments.push(currentSegment);
+    const lastItem = currentSegment[currentSegment.length - 1];
+    segments.push({
+      text: currentSegment.map(i => i.text).join(' '),
+      start: segmentStart,
+      end: lastItem.start + lastItem.duration
+    });
   }
 
   return segments;
@@ -126,12 +146,19 @@ async function summarizeSegments(segments) {
 
   for (const segment of segments) {
     try {
-      const segmentText = segment.map(item => item.text).join(' ');
-      const summary = await summarizeTextWithTimeout(segmentText);
-      summaries.push(summary);
+      const summary = await summarizeTextWithTimeout(segment.text);
+      summaries.push({
+        summary,
+        start: segment.start,
+        end: segment.end
+      });
     } catch (error) {
       console.error('Error summarizing segment:', error);
-      summaries.push('Error summarizing this segment.');
+      summaries.push({
+        summary: 'Error summarizing this segment.',
+        start: segment.start,
+        end: segment.end
+      });
     }
   }
 
@@ -181,24 +208,29 @@ function structureSummary(summaries) {
   let structuredSummary = "Video Summary:\n\n";
 
   summaries.forEach((summary, index) => {
-    structuredSummary += `Chapter ${index + 1}:\n`;
-    const points = extractKeyPoints(summary);
-    points.forEach(point => {
-      structuredSummary += `  • ${point}\n`;
-    });
-    structuredSummary += '\n';
+    const formattedStart = formatTimestamp(summary.start / 1000);
+    const formattedEnd = formatTimestamp(summary.end / 1000);
+    structuredSummary += `Chapter ${index + 1} [${formattedStart} - ${formattedEnd}]:\n${summary.summary}\n\n`;
   });
 
   return structuredSummary;
 }
 
 function extractKeyPoints(summary) {
-  const sentences = summary.split(/[.!?]+/).filter(s => s.trim().length > 0);
-  return sentences.map(s => capitalizeFirstLetter(decodeHTMLEntities(s.trim())));
-}
+  const tokenizer = new natural.SentenceTokenizer();
+  const sentences = tokenizer.tokenize(summary);
+  
+  const tfidf = new natural.TfIdf();
+  sentences.forEach(sentence => tfidf.addDocument(sentence));
 
-function capitalizeFirstLetter(string) {
-  return string.charAt(0).toUpperCase() + string.slice(1);
+  const keyPoints = sentences.map((sentence, index) => {
+    const terms = tfidf.listTerms(index);
+    const score = terms.reduce((sum, term) => sum + term.tfidf, 0);
+    return { sentence, score };
+  });
+
+  keyPoints.sort((a, b) => b.score - a.score);
+  return keyPoints.slice(0, 5).map(point => point.sentence);
 }
 
 function handleError(res, error) {
@@ -237,30 +269,23 @@ function handleError(res, error) {
 }
 
 function validateVideoLength(transcript) {
-  const MAX_TRANSCRIPT_LENGTH = 100000; // Adjust as needed
+  const MAX_TRANSCRIPT_LENGTH = 100000;
   if (transcript.length > MAX_TRANSCRIPT_LENGTH) {
     throw new Error(`Video transcript is too long (${transcript.length} characters). Maximum allowed is ${MAX_TRANSCRIPT_LENGTH} characters.`);
   }
 }
 
-function decodeHTMLEntities(text) {
-  const entities = {
-    '&#39;': "'",
-    '&quot;': '"',
-    '&lt;': '<',
-    '&gt;': '>',
-    '&amp;': '&',
-    '&#x27;': "'"
-  };
-  return text.replace(/&([^;]+);/g, function(match, entity) {
-    return entities[match] || match;
-  });
+function formatTimestamp(seconds) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
 function formatTranscript(transcript) {
   return transcript.map(item => {
-    const decodedText = decodeHTMLEntities(item.text);
-    return `[${item.timestamp}] ${decodedText}`;
+    const formattedTime = formatTimestamp(item.start / 1000);
+    return `[${formattedTime}] ${item.text}`;
   }).join('\n');
 }
 
