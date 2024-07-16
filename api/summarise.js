@@ -13,59 +13,74 @@ const analyticsCache = new NodeCache({ stdTTL: 86400 });
 
 const SUMMARY_TIMEOUT = 55000;
 
-module.exports = async (req, res) => {
+module.exports = (req, res) => {
+  // Wrap the entire function in a try-catch block
   try {
-    const { url } = req.query;
+    // Ensure the response is always JSON
+    res.setHeader('Content-Type', 'application/json');
 
-    console.log('Function invoked with URL:', url);
+    // Use an async IIFE to allow top-level await
+    (async () => {
+      try {
+        const { url } = req.query;
 
-    if (!url || !isValidYouTubeUrl(url)) {
-      return handleError(res, new Error('Invalid YouTube URL'));
-    }
+        console.log('Function invoked with URL:', url);
 
-    const videoId = extractVideoId(url);
-    console.log('Extracted Video ID:', videoId);
+        if (!url || !isValidYouTubeUrl(url)) {
+          return handleError(res, new Error('Invalid YouTube URL'));
+        }
 
-    if (!videoId) {
-      return handleError(res, new Error('Could not extract video ID'));
-    }
+        const videoId = extractVideoId(url);
+        console.log('Extracted Video ID:', videoId);
 
-    const cachedResult = cache.get(videoId);
-    if (cachedResult) {
-      console.log('Returning cached result');
-      return res.status(200).json(cachedResult);
-    }
+        if (!videoId) {
+          return handleError(res, new Error('Could not extract video ID'));
+        }
 
-    const metadata = await fetchVideoMetadata(videoId);
-    console.log('Fetched video metadata');
+        const cachedResult = cache.get(videoId);
+        if (cachedResult) {
+          console.log('Returning cached result');
+          return res.status(200).json(cachedResult);
+        }
 
-    const transcript = await fetchTranscript(videoId);
-    console.log('Transcript fetched, length:', transcript.length);
+        const metadata = await fetchVideoMetadata(videoId);
+        console.log('Fetched video metadata');
 
-    validateVideoLength(transcript);
+        const transcript = await fetchTranscript(videoId);
+        console.log('Transcript fetched, length:', transcript.length);
 
-    const segments = segmentTranscript(transcript);
-    const summaries = await summarizeSegments(segments);
-    const structuredSummary = structureSummary(summaries);
-    const keyPoints = extractKeyPoints(structuredSummary);
+        validateVideoLength(transcript);
 
-    console.log('Structured summary and key points generated');
+        const segments = segmentTranscript(transcript);
+        const summaries = await summarizeSegments(segments);
+        const structuredSummary = structureSummary(summaries);
+        const keyPoints = extractKeyPoints(structuredSummary);
 
-    const result = {
-      metadata,
-      transcript: formatTranscript(transcript),
-      summary: structuredSummary,
-      keyPoints,
-      message: `Transcript fetched and summarized for video: ${videoId}`,
-      timestamp: new Date().toISOString()
-    };
+        console.log('Structured summary and key points generated');
 
-    cache.set(videoId, result);
-    recordUsage(videoId);
+        const result = {
+          metadata,
+          transcript: formatTranscript(transcript),
+          summary: structuredSummary,
+          keyPoints,
+          message: `Transcript fetched and summarized for video: ${videoId}`,
+          timestamp: new Date().toISOString()
+        };
 
-    return res.status(200).json(result);
+        cache.set(videoId, result);
+        recordUsage(videoId);
+
+        return res.status(200).json(result);
+      } catch (error) {
+        console.error('Error in serverless function:', error);
+        return handleError(res, error);
+      }
+    })().catch(error => {
+      console.error('Unhandled promise rejection:', error);
+      return handleError(res, error);
+    });
   } catch (error) {
-    console.error('Error in serverless function:', error);
+    console.error('Unexpected error:', error);
     return handleError(res, error);
   }
 };
@@ -282,7 +297,7 @@ function handleError(res, error) {
     responseBody.youtubeApiKey = YOUTUBE_API_KEY ? 'Set' : 'Not set';
   }
 
-  return res.status(statusCode).json(responseBody);
+  res.status(statusCode).json(responseBody);
 }
 
 function validateVideoLength(transcript) {
