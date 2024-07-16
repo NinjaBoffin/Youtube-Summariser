@@ -1,7 +1,6 @@
 const { YoutubeTranscript } = require('youtube-transcript');
 const { HfInference } = require('@huggingface/inference');
 const NodeCache = require('node-cache');
-const rateLimit = require('express-rate-limit');
 
 const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
 const hf = new HfInference(HUGGINGFACE_API_KEY);
@@ -11,13 +10,7 @@ const analyticsCache = new NodeCache({ stdTTL: 86400 }); // Cache for 24 hours
 
 const SUMMARY_TIMEOUT = 55000; // 55 seconds to stay within the 60-second limit
 
-// Rate limiting middleware
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
-});
-
-module.exports = limiter(async (req, res) => {
+module.exports = async (req, res) => {
   try {
     const { url } = req.query;
 
@@ -27,13 +20,16 @@ module.exports = limiter(async (req, res) => {
       return res.status(400).json({ error: 'Missing URL parameter' });
     }
 
-    // Improved URL validation
     if (!isValidYouTubeUrl(url)) {
       return res.status(400).json({ error: 'Invalid YouTube URL' });
     }
 
     const videoId = extractVideoId(url);
     console.log('Extracted Video ID:', videoId);
+
+    if (!videoId) {
+      return res.status(400).json({ error: 'Could not extract video ID' });
+    }
 
     const cachedResult = cache.get(videoId);
     if (cachedResult) {
@@ -63,12 +59,12 @@ module.exports = limiter(async (req, res) => {
     cache.set(videoId, result);
     recordUsage(videoId);
 
-    res.status(200).json(result);
+    return res.status(200).json(result);
   } catch (error) {
     console.error('Error in serverless function:', error);
-    handleError(res, error);
+    return handleError(res, error);
   }
-});
+};
 
 // Improved YouTube URL validation
 function isValidYouTubeUrl(url) {
@@ -221,24 +217,15 @@ function handleError(res, error) {
 
   if (errorMessage.includes('Rate limit reached')) {
     statusCode = 429;
-    responseBody = {
-      error: 'Rate limit reached',
-      details: 'The Hugging Face API rate limit has been reached. Please try again later or subscribe to a plan at https://huggingface.co/pricing',
-      timestamp: timestamp
-    };
+    responseBody.error = 'Rate limit reached';
+    responseBody.details = 'The Hugging Face API rate limit has been reached. Please try again later or subscribe to a plan at https://huggingface.co/pricing';
   } else if (errorMessage.includes('Timeout')) {
     statusCode = 504;
-    responseBody = {
-      error: 'Timeout',
-      details: 'The request timed out. Please try again with a shorter video or increase the timeout limit.',
-      timestamp: timestamp
-    };
+    responseBody.error = 'Timeout';
+    responseBody.details = 'The request timed out. Please try again with a shorter video or increase the timeout limit.';
   } else if (errorMessage.includes('blob')) {
-    responseBody = {
-      error: 'Hugging Face API error',
-      details: 'An error occurred while fetching the blob from the Hugging Face API. Please try again later.',
-      timestamp: timestamp
-    };
+    responseBody.error = 'Hugging Face API error';
+    responseBody.details = 'An error occurred while fetching the blob from the Hugging Face API. Please try again later.';
   }
 
   // Add additional debug information in non-production environments
@@ -248,7 +235,7 @@ function handleError(res, error) {
     responseBody.huggingFaceApiKey = HUGGINGFACE_API_KEY ? 'Set' : 'Not set';
   }
 
-  res.status(statusCode).json(responseBody);
+  return res.status(statusCode).json(responseBody);
 }
 
 function validateVideoLength(transcript) {
