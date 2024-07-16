@@ -222,20 +222,24 @@ async function summarizeText(text) {
     if (!HUGGINGFACE_API_KEY) {
       throw new Error('HUGGINGFACE_API_KEY is not set');
     }
-    const result = await hf.summarization({
-      model: 'facebook/bart-large-cnn',
-      inputs: text,
+    
+    // Use GPT-2 for text generation instead of BART for summarization
+    const result = await hf.textGeneration({
+      model: 'gpt2',
+      inputs: `Summarize the following text:\n\n${text}\n\nSummary:`,
       parameters: {
-        max_length: 150,
-        min_length: 50,
-        do_sample: false,
-        num_beams: 4,
+        max_new_tokens: 150,
         temperature: 0.7,
-        repetition_penalty: 1.5
+        top_p: 0.9,
+        repetition_penalty: 1.2,
+        no_repeat_ngram_size: 3
       }
     });
+    
     console.log('Summarization successful');
-    return result.summary_text;
+    // Extract the generated summary from the result
+    const summary = result.generated_text.split('Summary:')[1].trim();
+    return summary;
   } catch (error) {
     console.error('Summarization error:', error);
     throw new Error('Failed to generate summary: ' + error.message);
