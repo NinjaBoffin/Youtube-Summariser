@@ -12,15 +12,13 @@ const cache = new NodeCache({ stdTTL: 3600 });
 const analyticsCache = new NodeCache({ stdTTL: 86400 });
 
 const SUMMARY_TIMEOUT = 55000;
+const MAX_SEGMENTS = 5; // Limit the number of segments to summarize
 
 module.exports = (req, res) => {
   console.log('Function started');
-  // Wrap the entire function in a try-catch block
   try {
-    // Ensure the response is always JSON
     res.setHeader('Content-Type', 'application/json');
 
-    // Use an async IIFE to allow top-level await
     (async () => {
       try {
         console.log('Async function started');
@@ -144,6 +142,9 @@ async function fetchTranscript(videoId) {
 }
 
 function segmentTranscript(transcript) {
+  const totalWords = transcript.reduce((sum, item) => sum + item.text.split(' ').length, 0);
+  const wordsPerSegment = Math.ceil(totalWords / MAX_SEGMENTS);
+
   const segments = [];
   let currentSegment = [];
   let wordCount = 0;
@@ -153,7 +154,7 @@ function segmentTranscript(transcript) {
     currentSegment.push(item);
     wordCount += item.text.split(' ').length;
 
-    if (wordCount >= 300 || item.text.endsWith('.')) {
+    if (wordCount >= wordsPerSegment) {
       segments.push({
         text: currentSegment.map(i => i.text).join(' '),
         start: segmentStart,
@@ -174,32 +175,31 @@ function segmentTranscript(transcript) {
     });
   }
 
-  return segments;
+  return segments.slice(0, MAX_SEGMENTS);
 }
 
 async function summarizeSegments(segments) {
-  const summaries = [];
-
-  for (const segment of segments) {
+  const summaries = await Promise.all(segments.map(async segment => {
     try {
       const summary = await summarizeTextWithTimeout(segment.text);
-      summaries.push({
+      return {
         summary,
         start: segment.start,
         end: segment.end
-      });
+      };
     } catch (error) {
       console.error('Error summarizing segment:', error);
-      summaries.push({
+      return {
         summary: 'Error summarizing this segment.',
         start: segment.start,
         end: segment.end
-      });
+      };
     }
-  }
+  }));
 
   return summaries;
 }
+
 
 async function summarizeTextWithTimeout(text) {
   return new Promise((resolve, reject) => {
@@ -227,8 +227,8 @@ async function summarizeText(text) {
       model: 'facebook/bart-large-cnn',
       inputs: text,
       parameters: {
-        max_length: 100,
-        min_length: 30,
+        max_length: 150,
+        min_length: 40,
         do_sample: false
       }
     });
