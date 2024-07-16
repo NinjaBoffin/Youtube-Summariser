@@ -130,16 +130,28 @@ async function fetchTranscript(videoId) {
 }
 
 function segmentTranscript(transcript) {
-  const itemsPerSegment = Math.ceil(transcript.length / MAX_SEGMENTS);
-  const segments = [];
+  const totalDuration = transcript.reduce((sum, item) => sum + item.duration, 0);
+  const segmentDuration = Math.ceil(totalDuration / MAX_SEGMENTS);
 
-  for (let i = 0; i < transcript.length; i += itemsPerSegment) {
-    const segmentItems = transcript.slice(i, i + itemsPerSegment);
-    segments.push({
-      text: segmentItems.map(item => item.text).join(' '),
-      start: segmentItems[0].start,
-      end: segmentItems[segmentItems.length - 1].start + segmentItems[segmentItems.length - 1].duration
-    });
+  const segments = [];
+  let currentSegment = [];
+  let currentDuration = 0;
+  let segmentStart = transcript[0].start;
+
+  for (const item of transcript) {
+    currentSegment.push(item);
+    currentDuration += item.duration;
+
+    if (currentDuration >= segmentDuration || item === transcript[transcript.length - 1]) {
+      segments.push({
+        text: currentSegment.map(i => i.text).join(' '),
+        start: segmentStart,
+        end: item.start + item.duration
+      });
+      currentSegment = [];
+      segmentStart = item.start + item.duration;
+      currentDuration = 0;
+    }
   }
 
   return segments;
@@ -221,6 +233,21 @@ function structureSummary(summaries) {
   return structuredSummary;
 }
 
+function formatTimestamp(milliseconds) {
+  const totalSeconds = Math.floor(milliseconds / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function formatTranscript(transcript) {
+  return transcript.map(item => {
+    const formattedTime = formatTimestamp(item.start);
+    return `[${formattedTime}] ${item.text}`;
+  }).join('\n');
+}
+
 function extractKeyPoints(summary) {
   const tokenizer = new natural.SentenceTokenizer();
   const sentences = tokenizer.tokenize(summary);
@@ -295,21 +322,6 @@ function validateVideoLength(transcript) {
   if (transcript.length > MAX_TRANSCRIPT_LENGTH) {
     throw new Error(`Video transcript is too long (${transcript.length} characters). Maximum allowed is ${MAX_TRANSCRIPT_LENGTH} characters.`);
   }
-}
-
-function formatTimestamp(milliseconds) {
-  const totalSeconds = Math.floor(milliseconds / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-}
-
-function formatTranscript(transcript) {
-  return transcript.map(item => {
-    const formattedTime = formatTimestamp(item.start);
-    return `[${formattedTime}] ${item.text}`;
-  }).join('\n');
 }
 
 function decodeHTMLEntities(text) {
