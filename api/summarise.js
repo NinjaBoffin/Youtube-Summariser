@@ -39,12 +39,15 @@ module.exports = async (req, res) => {
 
     validateVideoLength(transcript);
 
-    const summary = await summarizeTextWithTimeout(transcript.map(item => item.text).join(' '));
-    console.log('Summary generated, length:', summary.length);
+    const segments = segmentTranscript(transcript);
+    const summaries = await summarizeSegments(segments);
+    const structuredSummary = structureSummary(summaries);
+
+    console.log('Structured summary generated');
 
     const result = {
       transcript: transcript.map(item => `${item.timestamp} ${decodeHTMLEntities(item.text)}`).join('\n'),
-      summary: decodeHTMLEntities(summary),
+      summary: structuredSummary,
       message: `Transcript fetched and summarized for video: ${videoId}`,
       timestamp: new Date().toISOString()
     };
@@ -55,36 +58,7 @@ module.exports = async (req, res) => {
     res.status(200).json(result);
   } catch (error) {
     console.error('Error in serverless function:', error);
-
-    const errorMessage = error.message || 'An unexpected error occurred';
-
-    if (errorMessage.includes('Rate limit reached')) {
-      res.status(429).json({
-        error: 'Rate limit reached',
-        details: 'The Hugging Face API rate limit has been reached. Please try again later or subscribe to a plan at https://huggingface.co/pricing',
-        timestamp: new Date().toISOString()
-      });
-    } else if (errorMessage.includes('Timeout')) {
-      res.status(504).json({
-        error: 'Timeout',
-        details: 'The request timed out. Please try again with a shorter text or increase the timeout limit.',
-        timestamp: new Date().toISOString()
-      });
-    } else if (errorMessage.includes('blob')) {
-      res.status(500).json({
-        error: 'Hugging Face API error',
-        details: 'An error occurred while fetching the blob from the Hugging Face API. Please try again later.',
-        timestamp: new Date().toISOString()
-      });
-    } else {
-      res.status(500).json({
-        error: 'An error occurred in the serverless function',
-        details: errorMessage,
-        stack: error.stack,
-        name: error.name,
-        huggingFaceApiKey: HUGGINGFACE_API_KEY ? 'Set' : 'Not set'
-      });
-    }
+    handleError(res, error);
   }
 };
 
@@ -114,7 +88,42 @@ function formatTimestamp(seconds) {
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-function summarizeTextWithTimeout(text) {
+function segmentTranscript(transcript) {
+  const segments = [];
+  let currentSegment = [];
+  let wordCount = 0;
+
+  for (const item of transcript) {
+    currentSegment.push(item);
+    wordCount += item.text.split(' ').length;
+
+    if (wordCount >= 300 || item.text.endsWith('.')) {
+      segments.push(currentSegment);
+      currentSegment = [];
+      wordCount = 0;
+    }
+  }
+
+  if (currentSegment.length > 0) {
+    segments.push(currentSegment);
+  }
+
+  return segments;
+}
+
+async function summarizeSegments(segments) {
+  const summaries = [];
+
+  for (const segment of segments) {
+    const segmentText = segment.map(item => item.text).join(' ');
+    const summary = await summarizeTextWithTimeout(segmentText);
+    summaries.push(summary);
+  }
+
+  return summaries;
+}
+
+async function summarizeTextWithTimeout(text) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error('Timeout')), SUMMARY_TIMEOUT);
     
@@ -136,43 +145,74 @@ async function summarizeText(text) {
     if (!HUGGINGFACE_API_KEY) {
       throw new Error('HUGGINGFACE_API_KEY is not set');
     }
-    const chunks = splitTextIntoChunks(text, 500); // Reduce chunk size to avoid timeouts
-    const summaries = await Promise.all(chunks.map(async (chunk) => {
-      try {
-        const result = await hf.summarization({
-          model: 'facebook/bart-large-cnn',
-          inputs: chunk,
-          parameters: {
-            max_length: 150,
-            min_length: 30,
-            do_sample: false
-          }
-        });
-        return result.summary_text;
-      } catch (hfError) {
-        if (hfError.message.includes('Rate limit reached')) {
-          throw new Error('Hugging Face API error: Rate limit reached. You reached free usage limit (reset hourly). Please subscribe to a plan at https://huggingface.co/pricing to use the API at this rate');
-        }
-        console.error('Hugging Face API error:', hfError);
-        throw new Error(`Hugging Face API error: ${hfError.message}`);
+    const result = await hf.summarization({
+      model: 'facebook/bart-large-cnn',
+      inputs: text,
+      parameters: {
+        max_length: 100,
+        min_length: 30,
+        do_sample: false
       }
-    }));
+    });
     console.log('Summarization successful');
-    return summaries.join(' ');
+    return result.summary_text;
   } catch (error) {
     console.error('Summarization error:', error);
     throw new Error('Failed to generate summary: ' + error.message);
   }
 }
 
-function splitTextIntoChunks(text, maxLength) {
-  const chunks = [];
-  let i = 0;
-  while (i < text.length) {
-    chunks.push(text.slice(i, i + maxLength));
-    i += maxLength;
+function structureSummary(summaries) {
+  let structuredSummary = "Video Summary:\n\n";
+
+  summaries.forEach((summary, index) => {
+    structuredSummary += `Chapter ${index + 1}:\n`;
+    const points = extractKeyPoints(summary);
+    points.forEach(point => {
+      structuredSummary += `- ${point}\n`;
+    });
+    structuredSummary += '\n';
+  });
+
+  return structuredSummary;
+}
+
+function extractKeyPoints(summary) {
+  // This is a simple implementation. You might want to use NLP techniques for better results.
+  const sentences = summary.split(/[.!?]+/).filter(s => s.trim().length > 0);
+  return sentences.map(s => s.trim());
+}
+
+function handleError(res, error) {
+  const errorMessage = error.message || 'An unexpected error occurred';
+
+  if (errorMessage.includes('Rate limit reached')) {
+    res.status(429).json({
+      error: 'Rate limit reached',
+      details: 'The Hugging Face API rate limit has been reached. Please try again later or subscribe to a plan at https://huggingface.co/pricing',
+      timestamp: new Date().toISOString()
+    });
+  } else if (errorMessage.includes('Timeout')) {
+    res.status(504).json({
+      error: 'Timeout',
+      details: 'The request timed out. Please try again with a shorter text or increase the timeout limit.',
+      timestamp: new Date().toISOString()
+    });
+  } else if (errorMessage.includes('blob')) {
+    res.status(500).json({
+      error: 'Hugging Face API error',
+      details: 'An error occurred while fetching the blob from the Hugging Face API. Please try again later.',
+      timestamp: new Date().toISOString()
+    });
+  } else {
+    res.status(500).json({
+      error: 'An error occurred in the serverless function',
+      details: errorMessage,
+      stack: error.stack,
+      name: error.name,
+      huggingFaceApiKey: HUGGINGFACE_API_KEY ? 'Set' : 'Not set'
+    });
   }
-  return chunks;
 }
 
 function validateVideoLength(transcript) {
