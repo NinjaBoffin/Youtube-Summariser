@@ -48,8 +48,14 @@ module.exports = (req, res) => {
         }
 
         console.log('Fetching video metadata');
-        const metadata = await fetchVideoMetadata(videoId);
-        console.log('Fetched video metadata');
+        let metadata;
+        try {
+          metadata = await fetchVideoMetadata(videoId);
+          console.log('Fetched video metadata');
+        } catch (error) {
+          console.error('Error fetching video metadata:', error);
+          metadata = { error: 'Failed to fetch video metadata' };
+        }
 
         console.log('Fetching transcript');
         const transcript = await fetchTranscript(videoId);
@@ -97,6 +103,10 @@ module.exports = (req, res) => {
 };
 
 async function fetchVideoMetadata(videoId) {
+  if (!YOUTUBE_API_KEY) {
+    console.warn('YOUTUBE_API_KEY is not set. Skipping metadata fetch.');
+    return { error: 'YouTube API key is not set' };
+  }
   const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${YOUTUBE_API_KEY}`;
   const response = await axios.get(url);
   const videoData = response.data.items[0];
