@@ -13,6 +13,7 @@ const analyticsCache = new NodeCache({ stdTTL: 86400 });
 
 const SUMMARY_TIMEOUT = 55000;
 const MAX_SEGMENTS = 5;
+const TIME_SCALE_FACTOR = 1000; // Scaling factor for timestamps
 
 module.exports = async (req, res) => {
   console.log('Function started');
@@ -129,8 +130,8 @@ async function fetchTranscript(videoId) {
     }
     return transcriptArray.map(item => ({
       text: decodeHTMLEntities(item.text),
-      start: item.offset,
-      duration: item.duration
+      start: item.offset * TIME_SCALE_FACTOR, // Scale up the start time
+      duration: item.duration * TIME_SCALE_FACTOR // Scale up the duration
     }));
   } catch (error) {
     console.error('Error fetching transcript:', error);
@@ -331,7 +332,8 @@ function formatTimestamp(milliseconds) {
     console.error('Invalid milliseconds value:', milliseconds);
     return '00:00:00';
   }
-  const totalSeconds = Math.floor(milliseconds / 1000);
+  const scaledMilliseconds = milliseconds / TIME_SCALE_FACTOR; // Scale down the milliseconds
+  const totalSeconds = Math.floor(scaledMilliseconds / 1000);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
