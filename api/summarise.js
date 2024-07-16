@@ -20,14 +20,14 @@ module.exports = async (req, res) => {
     console.log('Function invoked with URL:', url);
 
     if (!url || !isValidYouTubeUrl(url)) {
-      return res.status(400).json({ error: 'Invalid YouTube URL' });
+      return handleError(res, new Error('Invalid YouTube URL'));
     }
 
     const videoId = extractVideoId(url);
     console.log('Extracted Video ID:', videoId);
 
     if (!videoId) {
-      return res.status(400).json({ error: 'Could not extract video ID' });
+      return handleError(res, new Error('Could not extract video ID'));
     }
 
     const cachedResult = cache.get(videoId);
@@ -265,6 +265,14 @@ function handleError(res, error) {
     statusCode = 413;
     responseBody.error = 'Video too long';
     responseBody.details = errorMessage;
+  } else if (errorMessage.includes('Invalid YouTube URL')) {
+    statusCode = 400;
+    responseBody.error = 'Invalid input';
+    responseBody.details = 'The provided URL is not a valid YouTube URL.';
+  } else if (errorMessage.includes('Could not extract video ID')) {
+    statusCode = 400;
+    responseBody.error = 'Invalid input';
+    responseBody.details = 'Could not extract a valid video ID from the provided URL.';
   }
 
   if (process.env.NODE_ENV !== 'production') {
