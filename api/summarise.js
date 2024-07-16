@@ -148,7 +148,7 @@ function segmentTranscript(transcript) {
   const segments = [];
   let currentSegment = [];
   let currentDuration = 0;
-  let segmentStart = transcript[0].start;
+  let segmentStart = 0;
 
   for (const item of transcript) {
     currentSegment.push(item);
@@ -158,20 +158,19 @@ function segmentTranscript(transcript) {
       segments.push({
         text: currentSegment.map(i => i.text).join(' '),
         start: segmentStart,
-        end: item.start + item.duration
+        end: segmentStart + currentDuration
       });
       currentSegment = [];
+      segmentStart += currentDuration;
       currentDuration = 0;
-      segmentStart = item.start + item.duration;
     }
   }
 
   if (currentSegment.length > 0) {
-    const lastItem = currentSegment[currentSegment.length - 1];
     segments.push({
       text: currentSegment.map(i => i.text).join(' '),
       start: segmentStart,
-      end: lastItem.start + lastItem.duration
+      end: segmentStart + currentDuration
     });
   }
 
@@ -250,8 +249,8 @@ function structureSummary(summaries) {
   let structuredSummary = "Video Summary:\n\n";
 
   summaries.forEach((summary, index) => {
-    const formattedStart = formatTimestamp(summary.start / 1000);
-    const formattedEnd = formatTimestamp(summary.end / 1000);
+    const formattedStart = formatTimestamp(summary.start);
+    const formattedEnd = formatTimestamp(summary.end);
     structuredSummary += `Chapter ${index + 1} [${formattedStart} - ${formattedEnd}]:\n${summary.summary}\n\n`;
   });
 
@@ -334,16 +333,17 @@ function validateVideoLength(transcript) {
   }
 }
 
-function formatTimestamp(seconds) {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+function formatTimestamp(milliseconds) {
+  const totalSeconds = Math.floor(milliseconds / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
 function formatTranscript(transcript) {
   return transcript.map(item => {
-    const formattedTime = formatTimestamp(item.start / 1000);
+    const formattedTime = formatTimestamp(item.start);
     return `[${formattedTime}] ${item.text}`;
   }).join('\n');
 }
