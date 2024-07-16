@@ -14,6 +14,7 @@ const analyticsCache = new NodeCache({ stdTTL: 86400 });
 const SUMMARY_TIMEOUT = 55000;
 
 module.exports = (req, res) => {
+  console.log('Function started');
   // Wrap the entire function in a try-catch block
   try {
     // Ensure the response is always JSON
@@ -22,11 +23,13 @@ module.exports = (req, res) => {
     // Use an async IIFE to allow top-level await
     (async () => {
       try {
+        console.log('Async function started');
         const { url } = req.query;
 
         console.log('Function invoked with URL:', url);
 
         if (!url || !isValidYouTubeUrl(url)) {
+          console.log('Invalid YouTube URL');
           return handleError(res, new Error('Invalid YouTube URL'));
         }
 
@@ -34,6 +37,7 @@ module.exports = (req, res) => {
         console.log('Extracted Video ID:', videoId);
 
         if (!videoId) {
+          console.log('Could not extract video ID');
           return handleError(res, new Error('Could not extract video ID'));
         }
 
@@ -43,17 +47,23 @@ module.exports = (req, res) => {
           return res.status(200).json(cachedResult);
         }
 
+        console.log('Fetching video metadata');
         const metadata = await fetchVideoMetadata(videoId);
         console.log('Fetched video metadata');
 
+        console.log('Fetching transcript');
         const transcript = await fetchTranscript(videoId);
         console.log('Transcript fetched, length:', transcript.length);
 
         validateVideoLength(transcript);
 
+        console.log('Segmenting transcript');
         const segments = segmentTranscript(transcript);
+        console.log('Summarizing segments');
         const summaries = await summarizeSegments(segments);
+        console.log('Structuring summary');
         const structuredSummary = structureSummary(summaries);
+        console.log('Extracting key points');
         const keyPoints = extractKeyPoints(structuredSummary);
 
         console.log('Structured summary and key points generated');
@@ -70,9 +80,10 @@ module.exports = (req, res) => {
         cache.set(videoId, result);
         recordUsage(videoId);
 
+        console.log('Sending successful response');
         return res.status(200).json(result);
       } catch (error) {
-        console.error('Error in serverless function:', error);
+        console.error('Error in async function:', error);
         return handleError(res, error);
       }
     })().catch(error => {
@@ -80,7 +91,7 @@ module.exports = (req, res) => {
       return handleError(res, error);
     });
   } catch (error) {
-    console.error('Unexpected error:', error);
+    console.error('Unexpected error in main function:', error);
     return handleError(res, error);
   }
 };
@@ -249,7 +260,7 @@ function extractKeyPoints(summary) {
 }
 
 function handleError(res, error) {
-  console.error('Error details:', error);
+  console.error('Handling error:', error);
 
   const errorMessage = error.message || 'An unexpected error occurred';
   const timestamp = new Date().toISOString();
