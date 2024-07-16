@@ -12,7 +12,7 @@ const cache = new NodeCache({ stdTTL: 3600 });
 const analyticsCache = new NodeCache({ stdTTL: 86400 });
 
 const SUMMARY_TIMEOUT = 55000;
-const MAX_SEGMENTS = 5; // Limit the number of segments to summarize
+const MAX_SEGMENTS = 5;
 
 module.exports = (req, res) => {
   console.log('Function started');
@@ -131,7 +131,7 @@ async function fetchTranscript(videoId) {
   try {
     const transcriptArray = await YoutubeTranscript.fetchTranscript(videoId);
     return transcriptArray.map(item => ({
-      text: item.text,
+      text: decodeHTMLEntities(item.text),
       start: item.offset,
       duration: item.duration
     }));
@@ -142,26 +142,26 @@ async function fetchTranscript(videoId) {
 }
 
 function segmentTranscript(transcript) {
-  const totalWords = transcript.reduce((sum, item) => sum + item.text.split(' ').length, 0);
-  const wordsPerSegment = Math.ceil(totalWords / MAX_SEGMENTS);
+  const totalDuration = transcript.reduce((sum, item) => sum + item.duration, 0);
+  const segmentDuration = Math.ceil(totalDuration / MAX_SEGMENTS);
 
   const segments = [];
   let currentSegment = [];
-  let wordCount = 0;
-  let segmentStart = 0;
+  let currentDuration = 0;
+  let segmentStart = transcript[0].start;
 
   for (const item of transcript) {
     currentSegment.push(item);
-    wordCount += item.text.split(' ').length;
+    currentDuration += item.duration;
 
-    if (wordCount >= wordsPerSegment) {
+    if (currentDuration >= segmentDuration) {
       segments.push({
         text: currentSegment.map(i => i.text).join(' '),
         start: segmentStart,
         end: item.start + item.duration
       });
       currentSegment = [];
-      wordCount = 0;
+      currentDuration = 0;
       segmentStart = item.start + item.duration;
     }
   }
@@ -200,7 +200,6 @@ async function summarizeSegments(segments) {
   return summaries;
 }
 
-
 async function summarizeTextWithTimeout(text) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error('Timeout')), SUMMARY_TIMEOUT);
@@ -228,8 +227,11 @@ async function summarizeText(text) {
       inputs: text,
       parameters: {
         max_length: 150,
-        min_length: 40,
-        do_sample: false
+        min_length: 50,
+        do_sample: false,
+        num_beams: 4,
+        temperature: 0.7,
+        repetition_penalty: 1.5
       }
     });
     console.log('Summarization successful');
@@ -340,6 +342,21 @@ function formatTranscript(transcript) {
     const formattedTime = formatTimestamp(item.start / 1000);
     return `[${formattedTime}] ${item.text}`;
   }).join('\n');
+}
+
+function decodeHTMLEntities(text) {
+  const entities = {
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&quot;': '"',
+    '&#39;': "'",
+    '&#x27;': "'",
+    '&#x2F;': '/',
+    '&#x60;': '`',
+    '&#x3D;': '='
+  };
+  return text.replace(/&[#A-Za-z0-9]+;/g, entity => entities[entity] || entity);
 }
 
 function recordUsage(videoId) {
