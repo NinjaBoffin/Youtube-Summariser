@@ -14,88 +14,76 @@ const analyticsCache = new NodeCache({ stdTTL: 86400 });
 const SUMMARY_TIMEOUT = 55000;
 const MAX_SEGMENTS = 5;
 
-module.exports = (req, res) => {
+module.exports = async (req, res) => {
   console.log('Function started');
   try {
     res.setHeader('Content-Type', 'application/json');
 
-    (async () => {
-      try {
-        console.log('Async function started');
-        const { url } = req.query;
+    const { url } = req.query;
+    console.log('Function invoked with URL:', url);
 
-        console.log('Function invoked with URL:', url);
+    if (!url || !isValidYouTubeUrl(url)) {
+      console.log('Invalid YouTube URL');
+      return handleError(res, new Error('Invalid YouTube URL'));
+    }
 
-        if (!url || !isValidYouTubeUrl(url)) {
-          console.log('Invalid YouTube URL');
-          return handleError(res, new Error('Invalid YouTube URL'));
-        }
+    const videoId = extractVideoId(url);
+    console.log('Extracted Video ID:', videoId);
 
-        const videoId = extractVideoId(url);
-        console.log('Extracted Video ID:', videoId);
+    if (!videoId) {
+      console.log('Could not extract video ID');
+      return handleError(res, new Error('Could not extract video ID'));
+    }
 
-        if (!videoId) {
-          console.log('Could not extract video ID');
-          return handleError(res, new Error('Could not extract video ID'));
-        }
+    const cachedResult = cache.get(videoId);
+    if (cachedResult) {
+      console.log('Returning cached result');
+      return res.status(200).json(cachedResult);
+    }
 
-        const cachedResult = cache.get(videoId);
-        if (cachedResult) {
-          console.log('Returning cached result');
-          return res.status(200).json(cachedResult);
-        }
+    console.log('Fetching video metadata');
+    let metadata;
+    try {
+      metadata = await fetchVideoMetadata(videoId);
+      console.log('Fetched video metadata');
+    } catch (error) {
+      console.error('Error fetching metadata:', error);
+      metadata = { error: 'Failed to fetch video metadata' };
+    }
 
-        console.log('Fetching video metadata');
-        let metadata;
-        try {
-          metadata = await fetchVideoMetadata(videoId);
-          console.log('Fetched video metadata');
-        } catch (error) {
-          console.error('Error fetching video metadata:', error);
-          metadata = { error: 'Failed to fetch video metadata' };
-        }
+    console.log('Fetching transcript');
+    const transcript = await fetchTranscript(videoId);
+    console.log('Transcript fetched, length:', transcript.length);
 
-        console.log('Fetching transcript');
-        const transcript = await fetchTranscript(videoId);
-        console.log('Transcript fetched, length:', transcript.length);
+    validateVideoLength(transcript);
 
-        validateVideoLength(transcript);
+    console.log('Segmenting transcript');
+    const segments = segmentTranscript(transcript);
+    console.log('Summarizing segments');
+    const summaries = await summarizeSegments(segments);
+    console.log('Structuring summary');
+    const structuredSummary = structureSummary(summaries);
+    console.log('Extracting key points');
+    const keyPoints = extractKeyPoints(structuredSummary);
 
-        console.log('Segmenting transcript');
-        const segments = segmentTranscript(transcript);
-        console.log('Summarizing segments');
-        const summaries = await summarizeSegments(segments);
-        console.log('Structuring summary');
-        const structuredSummary = structureSummary(summaries);
-        console.log('Extracting key points');
-        const keyPoints = extractKeyPoints(structuredSummary);
+    console.log('Structured summary and key points generated');
 
-        console.log('Structured summary and key points generated');
+    const result = {
+      metadata,
+      transcript: formatTranscript(transcript),
+      summary: structuredSummary,
+      keyPoints,
+      message: `Transcript fetched and summarized for video: ${videoId}`,
+      timestamp: new Date().toISOString()
+    };
 
-        const result = {
-          metadata,
-          transcript: formatTranscript(transcript),
-          summary: structuredSummary,
-          keyPoints,
-          message: `Transcript fetched and summarized for video: ${videoId}`,
-          timestamp: new Date().toISOString()
-        };
+    cache.set(videoId, result);
+    recordUsage(videoId);
 
-        cache.set(videoId, result);
-        recordUsage(videoId);
-
-        console.log('Sending successful response');
-        return res.status(200).json(result);
-      } catch (error) {
-        console.error('Error in async function:', error);
-        return handleError(res, error);
-      }
-    })().catch(error => {
-      console.error('Unhandled promise rejection:', error);
-      return handleError(res, error);
-    });
+    console.log('Sending successful response');
+    return res.status(200).json(result);
   } catch (error) {
-    console.error('Unexpected error in main function:', error);
+    console.error('Error in main function:', error);
     return handleError(res, error);
   }
 };
@@ -142,35 +130,23 @@ async function fetchTranscript(videoId) {
 }
 
 function segmentTranscript(transcript) {
-  const totalDuration = transcript.reduce((sum, item) => sum + item.duration, 0);
-  const segmentDuration = Math.ceil(totalDuration / MAX_SEGMENTS);
-
+  const itemsPerSegment = Math.ceil(transcript.length / MAX_SEGMENTS);
   const segments = [];
-  let currentSegment = [];
-  let currentDuration = 0;
-  let segmentStart = transcript[0].start;
 
-  for (const item of transcript) {
-    currentSegment.push(item);
-    currentDuration += item.duration;
-
-    if (currentDuration >= segmentDuration || item === transcript[transcript.length - 1]) {
-      segments.push({
-        text: currentSegment.map(i => i.text).join(' '),
-        start: segmentStart,
-        end: item.start + item.duration
-      });
-      currentSegment = [];
-      segmentStart = item.start + item.duration;
-      currentDuration = 0;
-    }
+  for (let i = 0; i < transcript.length; i += itemsPerSegment) {
+    const segmentItems = transcript.slice(i, i + itemsPerSegment);
+    segments.push({
+      text: segmentItems.map(item => item.text).join(' '),
+      start: segmentItems[0].start,
+      end: segmentItems[segmentItems.length - 1].start + segmentItems[segmentItems.length - 1].duration
+    });
   }
 
-  return segments.slice(0, MAX_SEGMENTS);
+  return segments;
 }
 
 async function summarizeSegments(segments) {
-  const summaries = await Promise.all(segments.map(async segment => {
+  return Promise.all(segments.map(async segment => {
     try {
       const summary = await summarizeTextWithTimeout(segment.text);
       return {
@@ -187,8 +163,6 @@ async function summarizeSegments(segments) {
       };
     }
   }));
-
-  return summaries;
 }
 
 async function summarizeTextWithTimeout(text) {
@@ -214,7 +188,6 @@ async function summarizeText(text) {
       throw new Error('HUGGINGFACE_API_KEY is not set');
     }
     
-    // Use GPT-2 for text generation instead of BART for summarization
     const result = await hf.textGeneration({
       model: 'gpt2',
       inputs: `Summarize the following text:\n\n${text}\n\nSummary:`,
@@ -228,7 +201,6 @@ async function summarizeText(text) {
     });
     
     console.log('Summarization successful');
-    // Extract the generated summary from the result
     const summary = result.generated_text.split('Summary:')[1].trim();
     return summary;
   } catch (error) {
