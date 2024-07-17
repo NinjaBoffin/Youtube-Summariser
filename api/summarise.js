@@ -8,7 +8,6 @@ const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 const cache = new NodeCache({ stdTTL: 3600 });
 const analyticsCache = new NodeCache({ stdTTL: 86400 });
 
-const MAX_SEGMENTS = 5;
 const MAX_CHUNK_LENGTH = 4000;
 
 module.exports = async (req, res) => {
@@ -38,16 +37,6 @@ module.exports = async (req, res) => {
       return res.status(200).json(cachedResult);
     }
 
-    console.log('Fetching video metadata');
-    let metadata;
-    try {
-      metadata = await fetchVideoMetadata(videoId);
-      console.log('Fetched video metadata');
-    } catch (error) {
-      console.error('Error fetching metadata:', error);
-      metadata = { error: 'Failed to fetch video metadata' };
-    }
-
     console.log('Fetching transcript');
     const transcript = await fetchTranscript(videoId);
     console.log('Transcript fetched, length:', transcript.length);
@@ -59,8 +48,7 @@ module.exports = async (req, res) => {
     console.log('Summary generated');
 
     const result = {
-      metadata,
-      transcript: formatTranscript(transcript),
+      transcript: transcript.map(item => item.text).join(' '),
       summary: summary,
       message: `Transcript fetched and summarized for video: ${videoId}`,
       timestamp: new Date().toISOString()
@@ -88,22 +76,6 @@ function extractVideoId(url) {
   return (match && match[7].length === 11) ? match[7] : null;
 }
 
-async function fetchVideoMetadata(videoId) {
-  if (!YOUTUBE_API_KEY) {
-    console.warn('YOUTUBE_API_KEY is not set. Skipping metadata fetch.');
-    return { error: 'YouTube API key is not set' };
-  }
-  const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${YOUTUBE_API_KEY}`;
-  const response = await axios.get(url);
-  const videoData = response.data.items[0];
-  return {
-    title: videoData.snippet.title,
-    description: videoData.snippet.description,
-    publishedAt: videoData.snippet.publishedAt,
-    duration: videoData.contentDetails.duration
-  };
-}
-
 async function fetchTranscript(videoId) {
   try {
     const transcriptArray = await YoutubeTranscript.fetchTranscript(videoId);
@@ -112,8 +84,6 @@ async function fetchTranscript(videoId) {
     }
     return transcriptArray.map(item => ({
       text: decodeHTMLEntities(item.text),
-      start: item.offset,
-      duration: item.duration
     }));
   } catch (error) {
     console.error('Error fetching transcript:', error);
@@ -122,36 +92,28 @@ async function fetchTranscript(videoId) {
 }
 
 async function summarizeTranscript(transcript) {
-  const chunks = chunkTranscript(transcript);
-  const summaries = [];
-
-  for (const chunk of chunks) {
-    const chunkText = chunk.map(item => `[${formatTimestamp(item.start)}] ${item.text}`).join('\n');
-    
-    try {
-      const summary = await summarizeWithOpenAI(chunkText);
-      summaries.push(summary);
-    } catch (error) {
-      console.error('Error in OpenAI API call:', error);
-      const fallbackSummary = generateFallbackSummary(chunkText);
-      summaries.push(fallbackSummary);
-    }
+  const fullTranscript = transcript.map(item => item.text).join(' ');
+  
+  try {
+    const summary = await summarizeWithOpenAI(fullTranscript);
+    return summary;
+  } catch (error) {
+    console.error('Error in OpenAI API call:', error);
+    return "Failed to generate summary.";
   }
-
-  return combineChunkSummaries(summaries, transcript[0].start, transcript[transcript.length - 1].start + transcript[transcript.length - 1].duration);
 }
 
 async function summarizeWithOpenAI(text) {
-  const prompt = `Summarize the following video transcript chunk. Provide a concise summary of the main points discussed:
+  const prompt = `Summarize the following video transcript. Provide a concise summary of the main points discussed:
 
-Transcript chunk:
+Transcript:
 ${text}
 
 Summary:`;
 
   const response = await axios.post('https://api.openai.com/v1/engines/text-davinci-002/completions', {
     prompt: prompt,
-    max_tokens: 150,
+    max_tokens: 200,
     temperature: 0.5,
   }, {
     headers: {
@@ -161,68 +123,6 @@ Summary:`;
   });
 
   return response.data.choices[0].text.trim();
-}
-
-function generateFallbackSummary(text) {
-  const sentences = text.split(/[.!?]+/);
-  const summary = sentences.slice(0, 3).join('. ') + '.';
-  return `Fallback summary: ${summary}`;
-}
-
-function chunkTranscript(transcript) {
-  const chunks = [];
-  let currentChunk = [];
-  let currentLength = 0;
-
-  for (const item of transcript) {
-    if (currentLength + item.text.length > MAX_CHUNK_LENGTH) {
-      chunks.push(currentChunk);
-      currentChunk = [];
-      currentLength = 0;
-    }
-    currentChunk.push(item);
-    currentLength += item.text.length;
-  }
-
-  if (currentChunk.length > 0) {
-    chunks.push(currentChunk);
-  }
-
-  return chunks;
-}
-
-function combineChunkSummaries(summaries, startTime, endTime) {
-  console.log(`Combining summaries: startTime=${startTime}, endTime=${endTime}`);
-  const totalDuration = endTime - startTime;
-  const segmentDuration = Math.floor(totalDuration / summaries.length);
-
-  let combinedSummary = "Video Summary:\n\n";
-
-  summaries.forEach((summary, index) => {
-    const segmentStart = startTime + (index * segmentDuration);
-    const segmentEnd = index === summaries.length - 1 ? endTime : segmentStart + segmentDuration;
-    const formattedStart = formatTimestamp(segmentStart);
-    const formattedEnd = formatTimestamp(segmentEnd);
-    combinedSummary += `Chapter ${index + 1} [${formattedStart} - ${formattedEnd}]:\n${summary}\n\n`;
-  });
-
-  return combinedSummary;
-}
-
-function formatTimestamp(milliseconds) {
-  console.log(`Formatting timestamp: milliseconds=${milliseconds}`);
-  const totalSeconds = Math.floor(milliseconds / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-}
-
-function formatTranscript(transcript) {
-  return transcript.map(item => {
-    const formattedTime = formatTimestamp(item.start);
-    return `[${formattedTime}] ${item.text}`;
-  }).join('\n');
 }
 
 function validateVideoLength(transcript) {
@@ -291,7 +191,6 @@ function handleError(res, error) {
     responseBody.stack = error.stack;
     responseBody.name = error.name;
     responseBody.openAIApiKey = OPENAI_API_KEY ? 'Set' : 'Not set';
-    responseBody.youtubeApiKey = YOUTUBE_API_KEY ? 'Set' : 'Not set';
   }
 
   res.status(statusCode).json(responseBody);
