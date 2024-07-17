@@ -151,6 +151,41 @@ async function summarizeTranscript(transcript) {
   return summaries.join('\n\n');
 }
 
+async function summarizeWithOpenAI(text, startTime, endTime) {
+  console.log('OpenAI API Key set:', !!OPENAI_API_KEY);
+  if (!OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY is not set');
+  }
+  const prompt = `Summarize the following video transcript chunk in 2-3 concise sentences, focusing on the main points. Present the information directly without using phrases like "The video discusses" or "The transcript mentions":\n\nTranscript chunk (${startTime} - ${endTime}):\n${text}\n\nSummary:`;
+
+  try {
+    const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+      model: "gpt-3.5-turbo",
+      messages: [
+        {"role": "system", "content": "You are a helpful assistant that summarizes video transcripts concisely and directly."},
+        {"role": "user", "content": prompt}
+      ],
+      max_tokens: 150,
+      temperature: 0.5,
+    }, {
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    return `[${startTime} - ${endTime}] ${response.data.choices[0].message.content.trim()}`;
+  } catch (error) {
+    console.error('Error summarizing with OpenAI:', error.response ? error.response.data : error.message);
+    throw new Error(`Failed to generate summary: ${error.message}`);
+  }
+}
+
+function generateFallbackSummary(text, startTime, endTime) {
+  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+  const summary = sentences.slice(0, 2).join('. ') + '.';
+  return `[${startTime} - ${endTime}] Fallback summary: ${summary}`;
+}
+
 function dynamicChunkTranscript(transcript) {
   const totalDuration = transcript[transcript.length - 1].offset + transcript[transcript.length - 1].duration;
   const optimalSegmentCount = Math.min(MAX_SEGMENTS, Math.max(MIN_SEGMENTS, Math.floor(totalDuration / 300))); // Aim for 5-minute segments
