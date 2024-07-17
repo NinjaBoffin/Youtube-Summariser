@@ -92,28 +92,33 @@ async function fetchTranscript(videoId) {
 }
 
 async function summarizeTranscript(transcript) {
-  const fullTranscript = transcript.map(item => item.text).join(' ');
-  
-  try {
-    const summary = await summarizeWithOpenAI(fullTranscript);
-    return summary;
-  } catch (error) {
-    console.error('Error in OpenAI API call:', error);
-    return "Failed to generate summary.";
+  const chunks = chunkTranscript(transcript.map(item => item.text).join(' '));
+  const summaries = [];
+
+  for (const chunk of chunks) {
+    try {
+      const summary = await summarizeWithOpenAI(chunk);
+      summaries.push(summary);
+    } catch (error) {
+      console.error('Error in OpenAI API call:', error);
+      summaries.push("Failed to generate summary for this chunk.");
+    }
   }
+
+  return summaries.join(' ');
 }
 
 async function summarizeWithOpenAI(text) {
-  const prompt = `Summarize the following video transcript. Provide a concise summary of the main points discussed:
+  const prompt = `Summarize the following video transcript chunk. Provide a concise summary of the main points discussed:
 
-Transcript:
+Transcript chunk:
 ${text}
 
 Summary:`;
 
   const response = await axios.post('https://api.openai.com/v1/engines/text-davinci-002/completions', {
     prompt: prompt,
-    max_tokens: 200,
+    max_tokens: 150,
     temperature: 0.5,
   }, {
     headers: {
@@ -123,6 +128,27 @@ Summary:`;
   });
 
   return response.data.choices[0].text.trim();
+}
+
+function chunkTranscript(transcript) {
+  const chunks = [];
+  let currentChunk = '';
+  const words = transcript.split(' ');
+
+  words.forEach(word => {
+    if (currentChunk.length + word.length + 1 <= MAX_CHUNK_LENGTH) {
+      currentChunk += ` ${word}`;
+    } else {
+      chunks.push(currentChunk.trim());
+      currentChunk = word;
+    }
+  });
+
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk.trim());
+  }
+
+  return chunks;
 }
 
 function validateVideoLength(transcript) {
@@ -191,6 +217,7 @@ function handleError(res, error) {
     responseBody.stack = error.stack;
     responseBody.name = error.name;
     responseBody.openAIApiKey = OPENAI_API_KEY ? 'Set' : 'Not set';
+    responseBody.youtubeApiKey = YOUTUBE_API_KEY ? 'Set' : 'Not set';
   }
 
   res.status(statusCode).json(responseBody);
