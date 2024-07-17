@@ -13,7 +13,6 @@ const analyticsCache = new NodeCache({ stdTTL: 86400 });
 
 const SUMMARY_TIMEOUT = 55000;
 const MAX_SEGMENTS = 5;
-const TIME_SCALE_FACTOR = 1000; // Scaling factor for timestamps
 
 module.exports = async (req, res) => {
   console.log('Function started');
@@ -130,8 +129,8 @@ async function fetchTranscript(videoId) {
     }
     return transcriptArray.map(item => ({
       text: decodeHTMLEntities(item.text),
-      start: item.offset * TIME_SCALE_FACTOR, // Scale up the start time
-      duration: item.duration * TIME_SCALE_FACTOR // Scale up the duration
+      start: item.offset,
+      duration: item.duration
     }));
   } catch (error) {
     console.error('Error fetching transcript:', error);
@@ -144,21 +143,19 @@ function segmentTranscript(transcript) {
     throw new Error('Invalid transcript: empty or undefined');
   }
 
-  const totalDuration = transcript.reduce((sum, item) => sum + item.duration, 0);
+  const totalDuration = transcript[transcript.length - 1].start + transcript[transcript.length - 1].duration;
   const segmentDuration = Math.ceil(totalDuration / MAX_SEGMENTS);
 
   console.log('Total duration:', totalDuration, 'Segment duration:', segmentDuration);
 
   const segments = [];
   let currentSegment = [];
-  let currentDuration = 0;
-  let segmentStart = transcript[0].start;
+  let segmentStart = 0;
 
   for (const item of transcript) {
     currentSegment.push(item);
-    currentDuration += item.duration;
 
-    if (currentDuration >= segmentDuration || item === transcript[transcript.length - 1]) {
+    if (item.start + item.duration - segmentStart >= segmentDuration || item === transcript[transcript.length - 1]) {
       segments.push({
         text: currentSegment.map(i => i.text).join(' '),
         start: segmentStart,
@@ -167,7 +164,6 @@ function segmentTranscript(transcript) {
       console.log('Segment created:', JSON.stringify(segments[segments.length - 1]));
       currentSegment = [];
       segmentStart = item.start + item.duration;
-      currentDuration = 0;
     }
   }
 
@@ -332,8 +328,7 @@ function formatTimestamp(milliseconds) {
     console.error('Invalid milliseconds value:', milliseconds);
     return '00:00:00';
   }
-  const scaledMilliseconds = milliseconds / TIME_SCALE_FACTOR; // Scale down the milliseconds
-  const totalSeconds = Math.floor(scaledMilliseconds / 1000);
+  const totalSeconds = Math.floor(milliseconds / 1000);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
