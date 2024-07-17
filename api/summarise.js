@@ -63,7 +63,11 @@ module.exports = async (req, res) => {
       transcript: formatTranscript(transcript),
       summary: summary,
       message: `Transcript fetched and summarized for video: ${videoId}`,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      debug: {
+        openAIKeySet: !!OPENAI_API_KEY,
+        youtubeKeySet: !!YOUTUBE_API_KEY
+      }
     };
 
     cache.set(videoId, result);
@@ -127,7 +131,7 @@ async function summarizeTranscript(transcript) {
 
   for (const chunk of chunks) {
     const chunkText = chunk.map(item => item.text).join(' ');
-    console.log('Sending chunk to OpenAI:', chunkText);
+    console.log('Summarizing chunk:', chunkText.substring(0, 100) + '...');
 
     try {
       const summary = await summarizeWithOpenAI(chunkText);
@@ -139,18 +143,23 @@ async function summarizeTranscript(transcript) {
     }
   }
 
-  return summaries.join(' ');
+  return summaries.join('\n\n');
 }
 
 async function summarizeWithOpenAI(text) {
+  console.log('OpenAI API Key set:', !!OPENAI_API_KEY);
   if (!OPENAI_API_KEY) {
     throw new Error('OPENAI_API_KEY is not set');
   }
-  const prompt = `Summarize the following video transcript chunk. Provide a concise summary of the main points discussed:\n\nTranscript chunk:\n${text}\n\nSummary:`;
+  const prompt = `Summarize the following video transcript chunk in 2-3 concise sentences, focusing on the main points:\n\nTranscript chunk:\n${text}\n\nSummary:`;
 
   try {
-    const response = await axios.post('https://api.openai.com/v1/engines/text-davinci-002/completions', {
-      prompt: prompt,
+    const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+      model: "gpt-3.5-turbo",
+      messages: [
+        {"role": "system", "content": "You are a helpful assistant that summarizes video transcripts."},
+        {"role": "user", "content": prompt}
+      ],
       max_tokens: 150,
       temperature: 0.5,
     }, {
@@ -159,7 +168,7 @@ async function summarizeWithOpenAI(text) {
         'Content-Type': 'application/json'
       }
     });
-    return response.data.choices[0].text.trim();
+    return response.data.choices[0].message.content.trim();
   } catch (error) {
     console.error('Error summarizing with OpenAI:', error.response ? error.response.data : error.message);
     throw new Error(`Failed to generate summary: ${error.message}`);
