@@ -148,18 +148,22 @@ async function summarizeWithOpenAI(text) {
   }
   const prompt = `Summarize the following video transcript chunk. Provide a concise summary of the main points discussed:\n\nTranscript chunk:\n${text}\n\nSummary:`;
 
-  const response = await axios.post('https://api.openai.com/v1/engines/text-davinci-002/completions', {
-    prompt: prompt,
-    max_tokens: 150,
-    temperature: 0.5,
-  }, {
-    headers: {
-      'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      'Content-Type': 'application/json'
-    }
-  });
-
-  return response.data.choices[0].text.trim();
+  try {
+    const response = await axios.post('https://api.openai.com/v1/engines/text-davinci-002/completions', {
+      prompt: prompt,
+      max_tokens: 150,
+      temperature: 0.5,
+    }, {
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    return response.data.choices[0].text.trim();
+  } catch (error) {
+    console.error('Error summarizing with OpenAI:', error.response ? error.response.data : error.message);
+    throw new Error(`Failed to generate summary: ${error.message}`);
+  }
 }
 
 function generateFallbackSummary(text) {
