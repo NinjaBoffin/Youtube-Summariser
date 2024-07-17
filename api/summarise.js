@@ -118,18 +118,23 @@ ${text}
 
 Summary:`;
 
-    const response = await axios.post('https://api.openai.com/v1/engines/text-davinci-002/completions', {
-        prompt: prompt,
-        max_tokens: MAX_TOKENS,
-        temperature: 0.5,
-    }, {
-        headers: {
-            'Authorization': `Bearer ${OPENAI_API_KEY}`,
-            'Content-Type': 'application/json'
-        }
-    });
+    try {
+        const response = await axios.post('https://api.openai.com/v1/engines/text-davinci-002/completions', {
+            prompt: prompt,
+            max_tokens: MAX_TOKENS,
+            temperature: 0.5,
+        }, {
+            headers: {
+                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
 
-    return response.data.choices[0].text.trim();
+        return response.data.choices[0].text.trim();
+    } catch (error) {
+        console.error('Error during OpenAI API call:', error.response ? error.response.data : error.message);
+        throw error;
+    }
 }
 
 function chunkTranscriptDynamically(transcript) {

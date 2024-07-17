@@ -14,6 +14,15 @@
             max-height: 300px;
             overflow-y: auto;
         }
+        .debug-content {
+            max-height: 150px;
+            overflow-y: auto;
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
@@ -40,6 +49,10 @@
                 <div id="transcript-text" class="transcript-content bg-gray-50 p-4 rounded"></div>
             </div>
         </div>
+        <div id="debug" class="hidden mt-4">
+            <h2 class="text-xl font-semibold mb-2">Debug Info:</h2>
+            <div id="debug-text" class="debug-content"></div>
+        </div>
     </div>
 
     <script>
@@ -51,10 +64,13 @@
             const resultElement = document.getElementById('result');
             const summaryTextElement = document.getElementById('summary-text');
             const transcriptTextElement = document.getElementById('transcript-text');
+            const debugElement = document.getElementById('debug');
+            const debugTextElement = document.getElementById('debug-text');
 
             loadingElement.classList.remove('hidden');
             errorElement.classList.add('hidden');
             resultElement.classList.add('hidden');
+            debugElement.classList.add('hidden');
 
             try {
                 const response = await fetch(`/api/summarise?url=${encodeURIComponent(url)}`);
@@ -69,7 +85,9 @@
                 }
             } catch (error) {
                 errorElement.textContent = error.message;
+                debugTextElement.textContent = error.stack;
                 errorElement.classList.remove('hidden');
+                debugElement.classList.remove('hidden');
             } finally {
                 loadingElement.classList.add('hidden');
             }
