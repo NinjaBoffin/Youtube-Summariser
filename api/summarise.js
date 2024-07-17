@@ -153,7 +153,7 @@ async function summarizeWithOpenAI(text, startTime, endTime) {
   if (!OPENAI_API_KEY) {
     throw new Error('OPENAI_API_KEY is not set');
   }
-  const prompt = `Summarize the following video transcript chunk in 2-3 concise sentences, focusing on the main points. Do not use phrases like "The video discusses" or "The transcript mentions". Instead, present the information directly:\n\nTranscript chunk (${startTime} - ${endTime}):\n${text}\n\nSummary:`;
+  const prompt = `Summarize the following video transcript chunk in 2-3 concise sentences, focusing on the main points. Present the information directly without using phrases like "The video discusses" or "The transcript mentions":\n\nTranscript chunk (${startTime} - ${endTime}):\n${text}\n\nSummary:`;
 
   try {
     const response = await axios.post('https://api.openai.com/v1/chat/completions', {
@@ -210,7 +210,11 @@ function formatTimestamp(milliseconds) {
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  if (hours > 0) {
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  } else {
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
 }
 
 function formatTranscript(transcript) {
