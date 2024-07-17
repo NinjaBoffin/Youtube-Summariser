@@ -1,15 +1,14 @@
 const { YoutubeTranscript } = require('youtube-transcript');
 const NodeCache = require('node-cache');
 const axios = require('axios');
-const { Configuration, OpenAIApi } = require("openai");
+const { OpenAIApi } = require("openai");
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 
-const configuration = new Configuration({
+const openai = new OpenAIApi({
   apiKey: OPENAI_API_KEY,
 });
-const openai = new OpenAIApi(configuration);
 
 const cache = new NodeCache({ stdTTL: 3600 });
 const analyticsCache = new NodeCache({ stdTTL: 86400 });
