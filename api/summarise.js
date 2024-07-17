@@ -129,16 +129,18 @@ async function summarizeTranscript(transcript) {
   const chunks = chunkTranscript(transcript);
   const summaries = [];
 
-  for (const chunk of chunks) {
+  for (const [index, chunk] of chunks.entries()) {
     const chunkText = chunk.map(item => item.text).join(' ');
-    console.log('Summarizing chunk:', chunkText.substring(0, 100) + '...');
+    const startTime = formatTimestamp(chunk[0].start);
+    const endTime = formatTimestamp(chunk[chunk.length - 1].start + chunk[chunk.length - 1].duration);
+    console.log(`Summarizing chunk ${index + 1}/${chunks.length}: ${startTime} - ${endTime}`);
 
     try {
-      const summary = await summarizeWithOpenAI(chunkText);
+      const summary = await summarizeWithOpenAI(chunkText, startTime, endTime);
       summaries.push(summary);
     } catch (error) {
       console.error('Error in OpenAI API call:', error.response ? error.response.data : error.message);
-      const fallbackSummary = generateFallbackSummary(chunkText);
+      const fallbackSummary = generateFallbackSummary(chunkText, startTime, endTime);
       summaries.push(fallbackSummary);
     }
   }
@@ -146,18 +148,18 @@ async function summarizeTranscript(transcript) {
   return summaries.join('\n\n');
 }
 
-async function summarizeWithOpenAI(text) {
+async function summarizeWithOpenAI(text, startTime, endTime) {
   console.log('OpenAI API Key set:', !!OPENAI_API_KEY);
   if (!OPENAI_API_KEY) {
     throw new Error('OPENAI_API_KEY is not set');
   }
-  const prompt = `Summarize the following video transcript chunk in 2-3 concise sentences, focusing on the main points:\n\nTranscript chunk:\n${text}\n\nSummary:`;
+  const prompt = `Summarize the following video transcript chunk in 2-3 concise sentences, focusing on the main points. Do not use phrases like "The video discusses" or "The transcript mentions". Instead, present the information directly:\n\nTranscript chunk (${startTime} - ${endTime}):\n${text}\n\nSummary:`;
 
   try {
     const response = await axios.post('https://api.openai.com/v1/chat/completions', {
       model: "gpt-3.5-turbo",
       messages: [
-        {"role": "system", "content": "You are a helpful assistant that summarizes video transcripts."},
+        {"role": "system", "content": "You are a helpful assistant that summarizes video transcripts concisely and directly."},
         {"role": "user", "content": prompt}
       ],
       max_tokens: 150,
@@ -168,17 +170,17 @@ async function summarizeWithOpenAI(text) {
         'Content-Type': 'application/json'
       }
     });
-    return response.data.choices[0].message.content.trim();
+    return `[${startTime} - ${endTime}] ${response.data.choices[0].message.content.trim()}`;
   } catch (error) {
     console.error('Error summarizing with OpenAI:', error.response ? error.response.data : error.message);
     throw new Error(`Failed to generate summary: ${error.message}`);
   }
 }
 
-function generateFallbackSummary(text) {
-  const sentences = text.split(/[.!?]+/);
-  const summary = sentences.slice(0, 3).join('. ') + '.';
-  return `Fallback summary: ${summary}`;
+function generateFallbackSummary(text, startTime, endTime) {
+  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+  const summary = sentences.slice(0, 2).join('. ') + '.';
+  return `[${startTime} - ${endTime}] Fallback summary: ${summary}`;
 }
 
 function chunkTranscript(transcript) {
@@ -201,6 +203,18 @@ function chunkTranscript(transcript) {
   }
 
   return chunks;
+}
+
+function formatTimestamp(milliseconds) {
+  const totalSeconds = Math.floor(milliseconds / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function formatTranscript(transcript) {
+  return transcript.map(item => `[${formatTimestamp(item.start)}] ${item.text}`).join('\n');
 }
 
 function validateVideoLength(transcript) {
