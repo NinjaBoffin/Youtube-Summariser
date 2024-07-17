@@ -8,7 +8,8 @@ const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 const cache = new NodeCache({ stdTTL: 3600 });
 const analyticsCache = new NodeCache({ stdTTL: 86400 });
 
-const MAX_CHUNK_LENGTH = 4000;
+const MAX_CHUNK_LENGTH = 4000; // Adjust as needed
+const MAX_TOKENS = 150; // Adjust as needed
 
 module.exports = async (req, res) => {
   console.log('Function started');
@@ -92,7 +93,8 @@ async function fetchTranscript(videoId) {
 }
 
 async function summarizeTranscript(transcript) {
-  const chunks = chunkTranscript(transcript.map(item => item.text).join(' '));
+  const fullTranscript = transcript.map(item => item.text).join(' ');
+  const chunks = chunkTranscriptDynamically(fullTranscript);
   const summaries = [];
 
   for (const chunk of chunks) {
@@ -118,7 +120,7 @@ Summary:`;
 
   const response = await axios.post('https://api.openai.com/v1/engines/text-davinci-002/completions', {
     prompt: prompt,
-    max_tokens: 150,
+    max_tokens: MAX_TOKENS,
     temperature: 0.5,
   }, {
     headers: {
@@ -130,7 +132,7 @@ Summary:`;
   return response.data.choices[0].text.trim();
 }
 
-function chunkTranscript(transcript) {
+function chunkTranscriptDynamically(transcript) {
   const chunks = [];
   let currentChunk = '';
   const words = transcript.split(' ');
