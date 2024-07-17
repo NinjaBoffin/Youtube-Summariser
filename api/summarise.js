@@ -1,6 +1,8 @@
 const { YoutubeTranscript } = require('youtube-transcript');
 const NodeCache = require('node-cache');
 const axios = require('axios');
+const pAll = require('p-all');
+const Sentiment = require('sentiment');
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
@@ -13,6 +15,10 @@ const MAX_SEGMENTS = 10;
 const MIN_SEGMENT_DURATION = 60; // 1 minute
 const MAX_SEGMENT_DURATION = 600; // 10 minutes
 const MAX_CHUNK_LENGTH = 4000;
+const MAX_RETRIES = 3;
+const CONCURRENT_REQUESTS = 3;
+
+const sentiment = new Sentiment();
 
 module.exports = async (req, res) => {
   console.log('Function started');
@@ -58,7 +64,7 @@ module.exports = async (req, res) => {
     validateVideoLength(transcript);
 
     console.log('Summarizing transcript');
-    const summary = await summarizeTranscript(transcript);
+    const summary = await summarizeTranscript(transcript, res);
     console.log('Summary generated');
 
     const result = {
@@ -128,35 +134,58 @@ async function fetchTranscript(videoId) {
   }
 }
 
-async function summarizeTranscript(transcript) {
+async function summarizeTranscript(transcript, res) {
   const chunks = dynamicChunkTranscript(transcript);
-  const summaries = [];
+  const totalChunks = chunks.length;
+  let processedChunks = 0;
 
-  for (const [index, chunk] of chunks.entries()) {
+  const summaryTasks = chunks.map((chunk, index) => async () => {
     const chunkText = chunk.map(item => item.text).join(' ');
     const startTime = formatTimestamp(chunk[0].offset);
     const endTime = formatTimestamp(chunk[chunk.length - 1].offset + chunk[chunk.length - 1].duration);
-    console.log(`Summarizing chunk ${index + 1}/${chunks.length}: ${startTime} - ${endTime}`);
+    console.log(`Summarizing chunk ${index + 1}/${totalChunks}: ${startTime} - ${endTime}`);
 
-    try {
-      const summary = await summarizeWithOpenAI(chunkText, startTime, endTime);
-      summaries.push(summary);
-    } catch (error) {
-      console.error('Error in OpenAI API call:', error.response ? error.response.data : error.message);
-      const fallbackSummary = generateFallbackSummary(chunkText, startTime, endTime);
-      summaries.push(fallbackSummary);
-    }
-  }
+    const summary = await retryWithBackoff(async () => {
+      const summaryText = await summarizeWithOpenAI(chunkText, startTime, endTime, chunk.length);
+      const sentimentScore = sentiment.analyze(summaryText).score;
+      processedChunks++;
+      updateProgress(res, processedChunks, totalChunks);
+      return `[${startTime} - ${endTime}] ${summaryText}\nSentiment: ${getSentimentLabel(sentimentScore)}`;
+    }, MAX_RETRIES);
 
+    return summary;
+  });
+
+  const summaries = await pAll(summaryTasks, { concurrency: CONCURRENT_REQUESTS });
   return summaries.join('\n\n');
 }
 
-async function summarizeWithOpenAI(text, startTime, endTime) {
+function updateProgress(res, current, total) {
+  const progress = Math.round((current / total) * 100);
+  res.write(`data: ${JSON.stringify({ progress })}\n\n`);
+}
+
+async function retryWithBackoff(fn, maxRetries) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (i === maxRetries - 1) throw error;
+      const delay = Math.pow(2, i) * 1000;
+      console.log(`Retrying after ${delay}ms`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+}
+
+async function summarizeWithOpenAI(text, startTime, endTime, segmentLength) {
   console.log('OpenAI API Key set:', !!OPENAI_API_KEY);
   if (!OPENAI_API_KEY) {
     throw new Error('OPENAI_API_KEY is not set');
   }
-  const prompt = `Summarize the following video transcript chunk in 2-3 concise sentences, focusing on the main points. Present the information directly without using phrases like "The video discusses" or "The transcript mentions":\n\nTranscript chunk (${startTime} - ${endTime}):\n${text}\n\nSummary:`;
+
+  const promptLength = segmentLength < 100 ? 'brief' : segmentLength > 500 ? 'detailed' : 'concise';
+  const prompt = `Provide a ${promptLength} summary of the following video transcript chunk, focusing on the main points. Present the information directly without using phrases like "The video discusses" or "The transcript mentions":\n\nTranscript chunk (${startTime} - ${endTime}):\n${text}\n\nSummary:`;
 
   try {
     const response = await axios.post('https://api.openai.com/v1/chat/completions', {
@@ -173,17 +202,19 @@ async function summarizeWithOpenAI(text, startTime, endTime) {
         'Content-Type': 'application/json'
       }
     });
-    return `[${startTime} - ${endTime}] ${response.data.choices[0].message.content.trim()}`;
+    return response.data.choices[0].message.content.trim();
   } catch (error) {
     console.error('Error summarizing with OpenAI:', error.response ? error.response.data : error.message);
     throw new Error(`Failed to generate summary: ${error.message}`);
   }
 }
 
-function generateFallbackSummary(text, startTime, endTime) {
-  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
-  const summary = sentences.slice(0, 2).join('. ') + '.';
-  return `[${startTime} - ${endTime}] Fallback summary: ${summary}`;
+function getSentimentLabel(score) {
+  if (score <= -5) return 'Very Negative';
+  if (score < 0) return 'Negative';
+  if (score === 0) return 'Neutral';
+  if (score <= 5) return 'Positive';
+  return 'Very Positive';
 }
 
 function dynamicChunkTranscript(transcript) {

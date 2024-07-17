@@ -15,6 +15,8 @@
     "express-rate-limit": "^7.3.1",
     "natural": "^7.1.0",
     "node-cache": "^5.1.2",
+    "p-all": "^5.0.0",
+    "sentiment": "^5.0.2",
     "youtube-transcript": "^1.0.6"
   },
   "author": "Boffin & Claude",
