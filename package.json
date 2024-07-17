@@ -15,7 +15,6 @@
     "express-rate-limit": "^7.3.1",
     "natural": "^7.1.0",
     "node-cache": "^5.1.2",
-    "openai": "^4.52.7",
     "youtube-transcript": "^1.0.6"
   },
   "author": "Boffin & Claude",

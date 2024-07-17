@@ -1,14 +1,9 @@
 const { YoutubeTranscript } = require('youtube-transcript');
 const NodeCache = require('node-cache');
 const axios = require('axios');
-const { OpenAIApi } = require("openai");
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
-
-const openai = new OpenAIApi({
-  apiKey: OPENAI_API_KEY,
-});
 
 const cache = new NodeCache({ stdTTL: 3600 });
 const analyticsCache = new NodeCache({ stdTTL: 86400 });
@@ -140,11 +135,15 @@ ${transcriptText}
 Summary:`;
 
   try {
-    const response = await openai.createCompletion({
-      model: "text-davinci-002",
+    const response = await axios.post('https://api.openai.com/v1/engines/text-davinci-002/completions', {
       prompt: prompt,
       max_tokens: 500,
       temperature: 0.5,
+    }, {
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
     });
 
     return response.data.choices[0].text.trim();
