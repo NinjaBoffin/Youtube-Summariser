@@ -1,7 +1,6 @@
 const { YoutubeTranscript } = require('youtube-transcript');
 const NodeCache = require('node-cache');
 const axios = require('axios');
-const pAll = require('p-all');
 const Sentiment = require('sentiment');
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -156,7 +155,7 @@ async function summarizeTranscript(transcript, res) {
     return summary;
   });
 
-  const summaries = await pAll(summaryTasks, { concurrency: CONCURRENT_REQUESTS });
+  const summaries = await Promise.all(summaryTasks.map(task => task()));
   return summaries.join('\n\n');
 }
 
@@ -333,7 +332,7 @@ function handleError(res, error) {
     responseBody.stack = error.stack;
     responseBody.name = error.name;
     responseBody.openAIApiKey = OPENAI_API_KEY ? 'Set' : 'Not set';
-    responseBody.youtubeApiKey = YOUTUBE_API_KEY ? 'Set' : 'Not set';
+    responseBody.youtubeKeySet = YOUTUBE_API_KEY ? 'Set' : 'Not set';
   }
 
   res.status(statusCode).json(responseBody);
