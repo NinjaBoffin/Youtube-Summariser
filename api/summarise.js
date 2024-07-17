@@ -2,12 +2,15 @@ const { YoutubeTranscript } = require('youtube-transcript');
 const NodeCache = require('node-cache');
 const axios = require('axios');
 
+// Environment variables
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 
+// Caching setup
 const cache = new NodeCache({ stdTTL: 3600 });
 const analyticsCache = new NodeCache({ stdTTL: 86400 });
 
+// Constants for transcript processing
 const MIN_SEGMENTS = 3;
 const MAX_SEGMENTS = 10;
 const MIN_SEGMENT_DURATION = 60; // 1 minute
@@ -23,6 +26,7 @@ module.exports = async (req, res) => {
     const { url } = req.query;
     console.log('Function invoked with URL:', url);
 
+    // Validate YouTube URL
     if (!url || !isValidYouTubeUrl(url)) {
       console.log('Invalid YouTube URL');
       return handleError(res, new Error('Invalid YouTube URL'));
@@ -36,12 +40,14 @@ module.exports = async (req, res) => {
       return handleError(res, new Error('Could not extract video ID'));
     }
 
+    // Check cache for existing result
     const cachedResult = cache.get(videoId);
     if (cachedResult) {
       console.log('Returning cached result');
       return res.status(200).json(cachedResult);
     }
 
+    // Fetch video metadata
     console.log('Fetching video metadata');
     let metadata;
     try {
@@ -52,6 +58,7 @@ module.exports = async (req, res) => {
       metadata = { error: 'Failed to fetch video metadata' };
     }
 
+    // Fetch and process transcript
     console.log('Fetching transcript');
     const transcript = await fetchTranscript(videoId);
     console.log('Transcript fetched, length:', transcript.length);
@@ -62,6 +69,7 @@ module.exports = async (req, res) => {
     const summary = await summarizeTranscript(transcript);
     console.log('Summary generated');
 
+    // Prepare result
     const result = {
       metadata,
       transcript: formatTranscript(transcript),
@@ -74,6 +82,7 @@ module.exports = async (req, res) => {
       }
     };
 
+    // Cache result and record usage
     cache.set(videoId, result);
     recordUsage(videoId);
 
