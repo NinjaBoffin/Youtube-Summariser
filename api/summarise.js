@@ -9,7 +9,7 @@ const cache = new NodeCache({ stdTTL: 3600 });
 const analyticsCache = new NodeCache({ stdTTL: 86400 });
 
 const MAX_SEGMENTS = 5;
-const MAX_CHUNK_LENGTH = 4000; // Maximum number of characters per chunk
+const MAX_CHUNK_LENGTH = 4000;
 
 module.exports = async (req, res) => {
   console.log('Function started');
@@ -154,9 +154,7 @@ Summary:`;
     }
   }
 
-  // Combine chunk summaries into a final summary
-  const finalSummary = combineChunkSummaries(summaries);
-  return finalSummary;
+  return combineChunkSummaries(summaries, transcript[0].start, transcript[transcript.length - 1].start + transcript[transcript.length - 1].duration);
 }
 
 function chunkTranscript(transcript) {
@@ -181,11 +179,18 @@ function chunkTranscript(transcript) {
   return chunks;
 }
 
-function combineChunkSummaries(summaries) {
+function combineChunkSummaries(summaries, startTime, endTime) {
+  const totalDuration = endTime - startTime;
+  const segmentDuration = Math.floor(totalDuration / summaries.length);
+
   let combinedSummary = "Video Summary:\n\n";
 
   summaries.forEach((summary, index) => {
-    combinedSummary += `Chapter ${index + 1}:\n${summary}\n\n`;
+    const segmentStart = startTime + (index * segmentDuration);
+    const segmentEnd = index === summaries.length - 1 ? endTime : segmentStart + segmentDuration;
+    const formattedStart = formatTimestamp(segmentStart);
+    const formattedEnd = formatTimestamp(segmentEnd);
+    combinedSummary += `Chapter ${index + 1} [${formattedStart} - ${formattedEnd}]:\n${summary}\n\n`;
   });
 
   return combinedSummary;
@@ -193,9 +198,10 @@ function combineChunkSummaries(summaries) {
 
 function formatTimestamp(milliseconds) {
   const totalSeconds = Math.floor(milliseconds / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
 function formatTranscript(transcript) {
@@ -207,8 +213,9 @@ function formatTranscript(transcript) {
 
 function validateVideoLength(transcript) {
   const MAX_TRANSCRIPT_LENGTH = 100000;
-  if (transcript.length > MAX_TRANSCRIPT_LENGTH) {
-    throw new Error(`Video transcript is too long (${transcript.length} characters). Maximum allowed is ${MAX_TRANSCRIPT_LENGTH} characters.`);
+  const totalLength = transcript.reduce((sum, item) => sum + item.text.length, 0);
+  if (totalLength > MAX_TRANSCRIPT_LENGTH) {
+    throw new Error(`Video transcript is too long (${totalLength} characters). Maximum allowed is ${MAX_TRANSCRIPT_LENGTH} characters.`);
   }
 }
 
@@ -224,7 +231,9 @@ function decodeHTMLEntities(text) {
     '&#x60;': '`',
     '&#x3D;': '='
   };
-  return text.replace(/&[#A-Za-z0-9]+;/g, entity => entities[entity] || entity);
+  return text.replace(/&([^;]+);/g, function(match, entity) {
+    return entities[match] || match;
+  });
 }
 
 function handleError(res, error) {
