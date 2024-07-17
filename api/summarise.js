@@ -210,6 +210,7 @@ function combineChunkSummaries(summaries, startTime, endTime) {
 }
 
 function formatTimestamp(milliseconds) {
+  console.log(`Formatting timestamp: milliseconds=${milliseconds}`);
   const totalSeconds = Math.floor(milliseconds / 1000);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -239,14 +240,12 @@ function decodeHTMLEntities(text) {
     '&gt;': '>',
     '&quot;': '"',
     '&#39;': "'",
-    '&#x27;': "'",
-    '&#x2F;': '/',
-    '&#x60;': '`',
-    '&#x3D;': '='
+    '&#x27': "'",
+    '&#x2F': '/',
+    '&#x60': '`',
+    '&#x3D': '='
   };
-  return text.replace(/&([^;]+);/g, function(match, entity) {
-    return entities[match] || match;
-  });
+  return text.replace(/&([^;]+);/g, (match, entity) => entities[match] || match);
 }
 
 function handleError(res, error) {
