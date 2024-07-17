@@ -9,6 +9,7 @@ const cache = new NodeCache({ stdTTL: 3600 });
 const analyticsCache = new NodeCache({ stdTTL: 86400 });
 
 const MAX_SEGMENTS = 5;
+const MAX_CHUNK_LENGTH = 4000; // Maximum number of characters per chunk
 
 module.exports = async (req, res) => {
   console.log('Function started');
@@ -121,36 +122,73 @@ async function fetchTranscript(videoId) {
 }
 
 async function summarizeTranscript(transcript) {
-  const transcriptText = transcript.map(item => `[${formatTimestamp(item.start)}] ${item.text}`).join('\n');
-  
-  const prompt = `Summarize the following video transcript into ${MAX_SEGMENTS} chapters. For each chapter, provide a timestamp range and a concise summary of the main points discussed during that time period. Format the summary as follows:
+  const chunks = chunkTranscript(transcript);
+  const summaries = [];
 
-Chapter 1 [MM:SS - MM:SS]: Summary of chapter 1
-Chapter 2 [MM:SS - MM:SS]: Summary of chapter 2
-...
+  for (const chunk of chunks) {
+    const chunkText = chunk.map(item => `[${formatTimestamp(item.start)}] ${item.text}`).join('\n');
+    
+    const prompt = `Summarize the following video transcript chunk. Provide a concise summary of the main points discussed:
 
-Transcript:
-${transcriptText}
+Transcript chunk:
+${chunkText}
 
 Summary:`;
 
-  try {
-    const response = await axios.post('https://api.openai.com/v1/engines/text-davinci-002/completions', {
-      prompt: prompt,
-      max_tokens: 500,
-      temperature: 0.5,
-    }, {
-      headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    try {
+      const response = await axios.post('https://api.openai.com/v1/engines/text-davinci-002/completions', {
+        prompt: prompt,
+        max_tokens: 150,
+        temperature: 0.5,
+      }, {
+        headers: {
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
-    return response.data.choices[0].text.trim();
-  } catch (error) {
-    console.error('Error in OpenAI API call:', error);
-    throw new Error('Failed to generate summary using OpenAI API');
+      summaries.push(response.data.choices[0].text.trim());
+    } catch (error) {
+      console.error('Error in OpenAI API call:', error);
+      summaries.push('Error summarizing this chunk.');
+    }
   }
+
+  // Combine chunk summaries into a final summary
+  const finalSummary = combineChunkSummaries(summaries);
+  return finalSummary;
+}
+
+function chunkTranscript(transcript) {
+  const chunks = [];
+  let currentChunk = [];
+  let currentLength = 0;
+
+  for (const item of transcript) {
+    if (currentLength + item.text.length > MAX_CHUNK_LENGTH) {
+      chunks.push(currentChunk);
+      currentChunk = [];
+      currentLength = 0;
+    }
+    currentChunk.push(item);
+    currentLength += item.text.length;
+  }
+
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk);
+  }
+
+  return chunks;
+}
+
+function combineChunkSummaries(summaries) {
+  let combinedSummary = "Video Summary:\n\n";
+
+  summaries.forEach((summary, index) => {
+    combinedSummary += `Chapter ${index + 1}:\n${summary}\n\n`;
+  });
+
+  return combinedSummary;
 }
 
 function formatTimestamp(milliseconds) {
