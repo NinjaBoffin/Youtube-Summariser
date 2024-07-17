@@ -116,7 +116,7 @@ async function fetchTranscript(videoId) {
     }
     return transcriptArray.map(item => ({
       text: decodeHTMLEntities(item.text),
-      start: item.offset,
+      offset: item.offset,
       duration: item.duration
     }));
   } catch (error) {
@@ -131,8 +131,8 @@ async function summarizeTranscript(transcript) {
 
   for (const [index, chunk] of chunks.entries()) {
     const chunkText = chunk.map(item => item.text).join(' ');
-    const startTime = formatTimestamp(chunk[0].start);
-    const endTime = formatTimestamp(chunk[chunk.length - 1].start + chunk[chunk.length - 1].duration);
+    const startTime = formatTimestamp(chunk[0].offset);
+    const endTime = formatTimestamp(chunk[chunk.length - 1].offset + chunk[chunk.length - 1].duration);
     console.log(`Summarizing chunk ${index + 1}/${chunks.length}: ${startTime} - ${endTime}`);
 
     try {
@@ -205,20 +205,19 @@ function chunkTranscript(transcript) {
   return chunks;
 }
 
-function formatTimestamp(milliseconds) {
-  const totalSeconds = Math.floor(milliseconds / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
+function formatTimestamp(seconds) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = Math.floor(seconds % 60);
   if (hours > 0) {
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
   } else {
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
   }
 }
 
 function formatTranscript(transcript) {
-  return transcript.map(item => `[${formatTimestamp(item.start)}] ${item.text}`).join('\n');
+  return transcript.map(item => `[${formatTimestamp(item.offset)}] ${item.text}`).join('\n');
 }
 
 function validateVideoLength(transcript) {
@@ -236,10 +235,10 @@ function decodeHTMLEntities(text) {
     '&gt;': '>',
     '&quot;': '"',
     '&#39;': "'",
-    '&#x27': "'",
-    '&#x2F': '/',
-    '&#x60': '`',
-    '&#x3D': '='
+    '&#x27;': "'",
+    '&#x2F;': '/',
+    '&#x60;': '`',
+    '&#x3D;': '='
   };
   return text.replace(/&([^;]+);/g, (match, entity) => entities[match] || match);
 }
@@ -296,16 +295,4 @@ function handleError(res, error) {
 function recordUsage(videoId) {
   const currentCount = analyticsCache.get(videoId) || 0;
   analyticsCache.set(videoId, currentCount + 1);
-}
-
-function formatTranscript(transcript) {
-  return transcript.map(item => `[${formatTimestamp(item.start)}] ${item.text}`).join('\n');
-}
-
-function formatTimestamp(milliseconds) {
-  const totalSeconds = Math.floor(milliseconds / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
