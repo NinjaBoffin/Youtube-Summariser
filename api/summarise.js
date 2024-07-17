@@ -143,6 +143,9 @@ async function summarizeTranscript(transcript) {
 }
 
 async function summarizeWithOpenAI(text) {
+  if (!OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY is not set');
+  }
   const prompt = `Summarize the following video transcript chunk. Provide a concise summary of the main points discussed:\n\nTranscript chunk:\n${text}\n\nSummary:`;
 
   const response = await axios.post('https://api.openai.com/v1/engines/text-davinci-002/completions', {
