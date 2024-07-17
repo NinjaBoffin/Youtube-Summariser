@@ -128,33 +128,45 @@ async function summarizeTranscript(transcript) {
   for (const chunk of chunks) {
     const chunkText = chunk.map(item => `[${formatTimestamp(item.start)}] ${item.text}`).join('\n');
     
-    const prompt = `Summarize the following video transcript chunk. Provide a concise summary of the main points discussed:
-
-Transcript chunk:
-${chunkText}
-
-Summary:`;
-
     try {
-      const response = await axios.post('https://api.openai.com/v1/engines/text-davinci-002/completions', {
-        prompt: prompt,
-        max_tokens: 150,
-        temperature: 0.5,
-      }, {
-        headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      summaries.push(response.data.choices[0].text.trim());
+      const summary = await summarizeWithOpenAI(chunkText);
+      summaries.push(summary);
     } catch (error) {
       console.error('Error in OpenAI API call:', error);
-      summaries.push('Error summarizing this chunk.');
+      const fallbackSummary = generateFallbackSummary(chunkText);
+      summaries.push(fallbackSummary);
     }
   }
 
   return combineChunkSummaries(summaries, transcript[0].start, transcript[transcript.length - 1].start + transcript[transcript.length - 1].duration);
+}
+
+async function summarizeWithOpenAI(text) {
+  const prompt = `Summarize the following video transcript chunk. Provide a concise summary of the main points discussed:
+
+Transcript chunk:
+${text}
+
+Summary:`;
+
+  const response = await axios.post('https://api.openai.com/v1/engines/text-davinci-002/completions', {
+    prompt: prompt,
+    max_tokens: 150,
+    temperature: 0.5,
+  }, {
+    headers: {
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      'Content-Type': 'application/json'
+    }
+  });
+
+  return response.data.choices[0].text.trim();
+}
+
+function generateFallbackSummary(text) {
+  const sentences = text.split(/[.!?]+/);
+  const summary = sentences.slice(0, 3).join('. ') + '.';
+  return `Fallback summary: ${summary}`;
 }
 
 function chunkTranscript(transcript) {
@@ -202,13 +214,6 @@ function formatTimestamp(milliseconds) {
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-}
-
-function formatTranscript(transcript) {
-  return transcript.map(item => {
-    const formattedTime = formatTimestamp(item.start);
-    return `[${formattedTime}] ${item.text}`;
-  }).join('\n');
 }
 
 function validateVideoLength(transcript) {
