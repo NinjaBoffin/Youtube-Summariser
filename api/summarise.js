@@ -1,7 +1,6 @@
 const { YoutubeTranscript } = require('youtube-transcript');
 const NodeCache = require('node-cache');
 const axios = require('axios');
-const Sentiment = require('sentiment');
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
@@ -15,8 +14,6 @@ const MIN_SEGMENT_DURATION = 60; // 1 minute
 const MAX_SEGMENT_DURATION = 600; // 10 minutes
 const MAX_CHUNK_LENGTH = 4000;
 const MAX_RETRIES = 3;
-
-const sentiment = new Sentiment();
 
 module.exports = async (req, res) => {
   console.log('Function started');
@@ -145,10 +142,9 @@ async function summarizeTranscript(transcript) {
 
     const summary = await retryWithBackoff(async () => {
       const summaryText = await summarizeWithOpenAI(chunkText, startTime, endTime, chunk.length);
-      const sentimentScore = sentiment.analyze(summaryText).score;
       processedChunks++;
       console.log(`Progress: ${Math.round((processedChunks / totalChunks) * 100)}%`);
-      return `[${startTime} - ${endTime}] ${summaryText}\nSentiment: ${getSentimentLabel(sentimentScore)}`;
+      return `[${startTime} - ${endTime}] ${summaryText}`;
     }, MAX_RETRIES);
 
     return summary;
@@ -205,14 +201,6 @@ async function summarizeWithOpenAI(text, startTime, endTime, segmentLength) {
     console.error('Error summarizing with OpenAI:', error.response ? error.response.data : error.message);
     throw new Error(`Failed to generate summary: ${error.message}`);
   }
-}
-
-function getSentimentLabel(score) {
-  if (score <= -5) return 'Very Negative';
-  if (score < 0) return 'Negative';
-  if (score === 0) return 'Neutral';
-  if (score <= 5) return 'Positive';
-  return 'Very Positive';
 }
 
 function dynamicChunkTranscript(transcript) {
