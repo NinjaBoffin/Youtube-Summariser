@@ -216,6 +216,13 @@ function formatTimestamp(milliseconds) {
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
+function formatTranscript(transcript) {
+  return transcript.map(item => {
+    const formattedTime = formatTimestamp(item.start);
+    return `[${formattedTime}] ${item.text}`;
+  }).join('\n');
+}
+
 function validateVideoLength(transcript) {
   const MAX_TRANSCRIPT_LENGTH = 100000;
   const totalLength = transcript.reduce((sum, item) => sum + item.text.length, 0);
