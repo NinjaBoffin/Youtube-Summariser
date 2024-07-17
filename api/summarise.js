@@ -15,7 +15,6 @@ const MIN_SEGMENT_DURATION = 60; // 1 minute
 const MAX_SEGMENT_DURATION = 600; // 10 minutes
 const MAX_CHUNK_LENGTH = 4000;
 const MAX_RETRIES = 3;
-const CONCURRENT_REQUESTS = 3;
 
 const sentiment = new Sentiment();
 
@@ -63,7 +62,7 @@ module.exports = async (req, res) => {
     validateVideoLength(transcript);
 
     console.log('Summarizing transcript');
-    const summary = await summarizeTranscript(transcript, res);
+    const summary = await summarizeTranscript(transcript);
     console.log('Summary generated');
 
     const result = {
@@ -133,7 +132,7 @@ async function fetchTranscript(videoId) {
   }
 }
 
-async function summarizeTranscript(transcript, res) {
+async function summarizeTranscript(transcript) {
   const chunks = dynamicChunkTranscript(transcript);
   const totalChunks = chunks.length;
   let processedChunks = 0;
@@ -148,7 +147,7 @@ async function summarizeTranscript(transcript, res) {
       const summaryText = await summarizeWithOpenAI(chunkText, startTime, endTime, chunk.length);
       const sentimentScore = sentiment.analyze(summaryText).score;
       processedChunks++;
-      updateProgress(res, processedChunks, totalChunks);
+      console.log(`Progress: ${Math.round((processedChunks / totalChunks) * 100)}%`);
       return `[${startTime} - ${endTime}] ${summaryText}\nSentiment: ${getSentimentLabel(sentimentScore)}`;
     }, MAX_RETRIES);
 
