@@ -192,6 +192,7 @@ function chunkTranscript(transcript) {
 }
 
 function combineChunkSummaries(summaries, startTime, endTime) {
+  console.log(`Combining summaries: startTime=${startTime}, endTime=${endTime}`);
   const totalDuration = endTime - startTime;
   const segmentDuration = Math.floor(totalDuration / summaries.length);
 
@@ -209,6 +210,7 @@ function combineChunkSummaries(summaries, startTime, endTime) {
 }
 
 function formatTimestamp(milliseconds) {
+  console.log(`Formatting timestamp: milliseconds=${milliseconds}`);
   const totalSeconds = Math.floor(milliseconds / 1000);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
